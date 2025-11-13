@@ -17,16 +17,18 @@
 #define MAX_USERS 30
 #define MAX_VEICULOS 10
 #define MAX_STR 100
-#define MAX_PIPE MAX_STR + 10
+#define MAX_PIPE MAX_STR + 15
 
 #define PIPE_CONTROLADOR "/tmp/controlador_in"
-#define PIPE_CLIENTE "/tmp/cliente_%d"
+#define PIPE_CLIENTE "/tmp/cliente_%s"
+
+#define LOGIN_SUCESSO "OK"
 
 
 // --- Structs ---
 typedef struct User{
     char nome[MAX_STR];
-    char pipe[MAX_PIPE];
+    // char pipe[MAX_PIPE];
 } User;
 
 

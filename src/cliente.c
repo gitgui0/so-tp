@@ -13,6 +13,9 @@ void handleSinal(int sinal, siginfo_t *info, void *context){
 
 int main(int argc, char* argv[]){
 
+    char login[150], confirmacao[5];
+    int nbytes;
+
     struct sigaction sa;
     memset(&sa, 0, sizeof(struct sigaction));
 
@@ -33,26 +36,58 @@ int main(int argc, char* argv[]){
     struct User user;
     memset(&user,0,sizeof(struct User));
 
-    strcpy(user.nome,argv[0]);
-    sprintf(user.pipe,PIPE_CLIENTE,getpid());
+    strcpy(user.nome,argv[1]);
 
-    if(mkfifo(user.pipe,0666) == -1){ // 0666 por agora
+
+    char pipe[MAX_PIPE];
+    sprintf(pipe,PIPE_CLIENTE,user.nome);
+
+    if(mkfifo(pipe,0666) == -1){ // 0666 por agora
         perror("Erro na criacao do pipe cliente");
         exit(EXIT_FAILURE);
     }
 
-    int fd = open(user.pipe,O_RDWR);
+    int fd = open(pipe,O_RDWR);
     if(fd == -1){
         perror("Erro ao abrir pipe cliente.");
-        unlink(user.pipe);
         exit(EXIT_FAILURE);
     }
+
+    sprintf(login, "%s", user.nome);
+
+    int fd_ctrl = open(PIPE_CONTROLADOR,O_WRONLY);
+    if(fd_ctrl == -1){
+        perror("Erro ao abrir pipe cliente.");
+        unlink(pipe);
+        exit(EXIT_FAILURE);
+    }
+
+    nbytes = write(fd_ctrl,&login,strlen(login));
+    if(nbytes == -1){
+        perror("Erro ao dar login com o cliente.");
+        close(fd);
+        unlink(pipe);
+    }
+
+    nbytes = read(fd,&confirmacao,sizeof(confirmacao));
+    if(nbytes == -1 || strcmp(confirmacao,LOGIN_SUCESSO) != 0){
+        perror("Erro ao dar login com o cliente.");
+        close(fd);
+        unlink(pipe);
+    }
+    
+
+    printf("DO CONTROLADOR: %s\n", confirmacao);
+
+
+
     while(loop){
-        scanf("%s",user.pipe);
+        //
+        break;
     }
 
     close(fd);
-    unlink(user.pipe);
+    unlink(pipe);
 
     return 0;
 }
