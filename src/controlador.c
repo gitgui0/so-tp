@@ -1,7 +1,28 @@
 #include "comum.h"
 
+int loop=1;
+
+void handleSinal(int sinal, siginfo_t *info, void *context){
+    if(sinal == SIGINT){
+        printf("\nSIGINT\n");
+        loop = 0;
+    }
+
+}
+
+
 int main(){
-    printf("Controlador arranca\n");
+    
+    setbuf(stdout,NULL);
+
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(struct sigaction));
+
+    sa.sa_sigaction = handleSinal;
+    sa.sa_flags = SA_SIGINFO;
+    sigaction(SIGINT, &sa, NULL);
+
+    
 
     // pipe ja existe
     if(access(PIPE_CONTROLADOR,F_OK) == 0){
@@ -21,9 +42,12 @@ int main(){
         exit(EXIT_FAILURE);
     }
 
-    char buf[100];
-    read(fd_ler,buf,sizeof(buf));
-    printf("%s", buf);
+    while(loop){
+        char buf[100];
+        read(fd_ler,buf,sizeof(buf));
+        printf("%s", buf);   
+    }
+
 
     close(fd_ler);
     unlink(PIPE_CONTROLADOR);
