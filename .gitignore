@@ -1,0 +1,26 @@
+# Arquivos de Sistema Operativo (MacOS, Linux, Windows)
+# Estes ficheiros são criados automaticamente
+*~
+*.swp
+.DS_Store
+Thumbs.db
+/build/
+
+# 1. Executáveis e Binários
+# O seu Makefile coloca os executáveis aqui
+/bin/
+
+# 2. Ficheiros Objeto Temporários
+# Ficheiros criados pelo compilador (gcc)
+*.o
+
+# 3. Ficheiros de Comunicação (FIFOs)
+# Estes são ficheiros criados em tempo de execução
+/tmp/*
+
+# 4. Ficheiro de Lock do Controlador
+# Criado para garantir instância única (Tarefa 1)
+controlador.lock
+
+# Ficheiros de depuração e análise
+*.log
