@@ -1,11 +1,16 @@
 #include "comum.h"
 
 int loop=1;
+volatile int tempo=0;
 
 void handleSinal(int sinal, siginfo_t *info, void *context){
     if(sinal == SIGINT){
         printf("\nSIGINT\n");
         loop = 0;
+    }
+    if(sinal == SIGALRM){
+        tempo++;
+        alarm(1);
     }
 
 }
@@ -45,12 +50,20 @@ int main(){
     
     setbuf(stdout,NULL);
 
-    struct sigaction sa;
-    memset(&sa, 0, sizeof(struct sigaction));
+    struct sigaction sa_int;
+    memset(&sa_int, 0, sizeof(struct sigaction));
 
-    sa.sa_sigaction = handleSinal;
-    sa.sa_flags = SA_SIGINFO;
-    sigaction(SIGINT, &sa, NULL);
+    sa_int.sa_sigaction = handleSinal;
+    sa_int.sa_flags = SA_SIGINFO;
+    sigaction(SIGINT, &sa_int, NULL);
+    sigaction(SIGALRM, &sa_int,NULL);
+
+
+    struct sigaction sa_alrm = {0};
+    sigemptyset(&sa_alrm.sa_mask);
+    sa_alrm.sa_sigaction = handleSinal;     
+    sa_alrm.sa_flags = SA_RESTART | SA_SIGINFO; // tem de ser com o restart
+    sigaction(SIGALRM, &sa_alrm, NULL);
 
     
 
@@ -60,7 +73,7 @@ int main(){
         return 0;
     }
 
-    if(mkfifo("/tmp/controlador_in", 0666) == -1){  // 0666 por agora
+    if(mkfifo(PIPE_CONTROLADOR, 0666) == -1){  // 0666 por agora
         perror("Erro ao criar pipe controlador.");
         exit(EXIT_FAILURE);
     }
@@ -72,11 +85,16 @@ int main(){
         exit(EXIT_FAILURE);
     }
 
+    alarm(1);
+
     while(loop){
         printf("\n");
         memset(&usr_tmp, 0, sizeof(struct User));
         nbytes = read(fd_ler, usr_tmp.nome, sizeof(struct User));
         if(nbytes == -1){
+            if (errno == EINTR){
+                continue;
+            }
             printf("Erro ao ler utilizador.");
             continue;
         }
@@ -102,6 +120,9 @@ int main(){
         
         // provavelmente isto vai sair daqui
         switch (res){
+            case 0:
+                printf("Utilizador %s adicionado com sucesso.\n", usr_tmp.nome);
+                break;
             case 2:
                 printf("Ja existe um utilizador com esse nome.\n");
                 break;
