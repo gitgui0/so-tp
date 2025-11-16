@@ -3,7 +3,7 @@
 int loop=1;
 volatile int tempo=0;
 User users[MAX_USERS]; 
-int nUsers = 0;
+int nUsers = 0,max_veiculos = 0;
 pid_t pid_filho;
 
 void listaUsers(User* users, int nUsers){
@@ -16,7 +16,7 @@ void listaUsers(User* users, int nUsers){
 
 void handleSinal(int sinal, siginfo_t *info, void *context){
     if(sinal == SIGINT){
-        printf("\nSIGINT\n");
+        printf("SIGINT\n");
         loop = 0;
     }
     if(sinal == SIGALRM){
@@ -93,6 +93,20 @@ int main(){
     char pipe[150], conf[5];
     
     setbuf(stdout,NULL);
+
+    char* s_nveiculos = getenv("NVEICULOS");
+    if(s_nveiculos == NULL) {
+        printf("[AVISO] Variável NVEICULOS não definida. A assumir %d.\n", MAX_VEICULOS);
+        max_veiculos = MAX_VEICULOS; 
+    } else {
+        max_veiculos = atoi(s_nveiculos); 
+        if (max_veiculos <= 0 || max_veiculos > MAX_VEICULOS) {
+            printf("[AVISO] NVEICULOS=%d inválido. A assumir %d.\n", max_veiculos, MAX_VEICULOS);
+            max_veiculos = MAX_VEICULOS;
+        }else{
+            printf("NVEICULOS definido para %d veículos.\n", max_veiculos);
+        }
+    }
 
     struct sigaction sa_int;
     memset(&sa_int, 0, sizeof(struct sigaction));
