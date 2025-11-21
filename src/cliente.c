@@ -53,7 +53,7 @@ int main(int argc, char* argv[]){
         exit(EXIT_FAILURE);
     }
 
-    sprintf(login, "%s", user.nome);
+    sprintf(login, "LOGIN %s %s %d", user.nome, pipe, getpid());
 
     int fd_ctrl = open(PIPE_CONTROLADOR,O_WRONLY);
     if(fd_ctrl == -1){

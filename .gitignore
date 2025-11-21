@@ -8,7 +8,7 @@ Thumbs.db
 
 # 1. Executáveis e Binários
 # O seu Makefile coloca os executáveis aqui
-/bin/
+/bin/*
 
 # 2. Ficheiros Objeto Temporários
 # Ficheiros criados pelo compilador (gcc)
