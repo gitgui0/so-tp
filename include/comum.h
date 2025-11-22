@@ -21,10 +21,22 @@
 #define MAX_STR 100
 #define MAX_PIPE MAX_STR + 15
 
+// Deixei assi talvez depois tira se nao sei 
+#define MAX_SERVICOS 50
+
 #define PIPE_CONTROLADOR "/tmp/controlador_in"
 #define PIPE_CLIENTE "/tmp/cliente_%s"
 
 #define LOGIN_SUCESSO "OK"
+
+// --- Estados do Serviço ---
+#define SERV_AGENDADO 0
+#define SERV_EM_CURSO 1
+#define SERV_CONCLUIDO 2
+
+// --- Estados do Veículo ---
+#define VEICULO_LIVRE 0
+#define VEICULO_OCUPADO 1
 
 
 // --- Structs ---
@@ -33,7 +45,26 @@ typedef struct User{
     char fifo_privado[MAX_PIPE];
     int fd_out;                     
     pid_t pid_cliente;
+    int ativo; // adicionei iusot pa depois facilitar a remoçao eadiçãop de novos users
 } User;
+
+typedef struct Servico{
+    int id;
+    int hora_agendada;
+    int distacia;
+    char origem[MAX_STR];
+    char destino[MAX_STR];
+    int estado; // 0 - agendado, 1 - em curso, 2 - concluido
+    pid_t pid_cliente;
+    pid_t pid_veiculo;
+} Servico;
+
+typedef struct Veiculo{
+    int id_servico;
+    int estado;
+    pid_t pid_veiculo;
+
+} Veiculo;
 
 typedef struct TUserInfo {
     int fd_pipe;                            // FD de leitura do PIPE_CONTROLADOR

@@ -9,6 +9,12 @@ User users[MAX_USERS];
 int nUsers = 0;
 int max_veiculos = 0;
 
+// Array para Serviços e Frota
+Servico servicos[MAX_SERVICOS];
+int nServicos = 0;
+
+Veiculo frota[MAX_VEICULOS];
+
 // Sincronização
 pthread_mutex_t users_mutex;
 
@@ -203,15 +209,19 @@ int main(){
     
     setbuf(stdout,NULL);
 
-    // 1. Configurações Iniciais
     char* s_nveiculos = getenv("NVEICULOS");
     if(s_nveiculos == NULL) {
         max_veiculos = MAX_VEICULOS; 
     } else {
         max_veiculos = atoi(s_nveiculos); 
         if (max_veiculos <= 0) max_veiculos = MAX_VEICULOS;
+        
+        if (max_veiculos > MAX_VEICULOS) {
+            printf("AVISO: NVEICULOS (%d) excede o limite compilado. A usar %d.\n", max_veiculos, MAX_VEICULOS);
+            max_veiculos = MAX_VEICULOS;
+        }
     }
-    printf("CONTROLADOR: Max Veiculos = %d\n", max_veiculos);
+    printf("Max Veiculos = %d\n", max_veiculos);
 
     // 2. Sinais
     struct sigaction sa;
