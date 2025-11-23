@@ -132,6 +132,7 @@ void* tUsers(void* arg) {
             buffer_msg[nbytes] = '\0'; 
             
             int res_scan = sscanf(buffer_msg, "%s %s %s %d", cmd, nome, fifo_nome, &pid_cli);
+            printf("[THREAD-USER] MENSAGEM RECEBIDA: %s\n", buffer_msg);
 
             if (res_scan == 4 && strcmp(cmd, "LOGIN") == 0) {
                 

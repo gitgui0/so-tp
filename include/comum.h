@@ -43,7 +43,7 @@
 typedef struct User{
     char nome[MAX_STR];
     char fifo_privado[MAX_PIPE];
-    int fd_out;                     
+    int fd;                     
     pid_t pid_cliente;
     int ativo; // adicionei iusot pa depois facilitar a remoçao eadiçãop de novos users
 } User;
