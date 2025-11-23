@@ -10,7 +10,11 @@ void handleSinal(int sinal, siginfo_t *info, void *context){
 }
 
 int executaComando(char* comando, User* user){
-    if(strcmp(comando,"LOGIN") == 0 && user->ativo == 0){
+    if(strcmp(comando,"LOGIN") == 0){
+        if(user->ativo == 1){
+            printf("Ja esta logado.\n");
+            return 0;
+        }
         char login[150], confirmacao[5];
         int nbytes;
 
@@ -38,7 +42,7 @@ int executaComando(char* comando, User* user){
         //RECEBER CONFIRMACAO DO LOGIN DO CONTROLADOR
 
         nbytes = read(user->fd,&confirmacao,sizeof(confirmacao));
-        
+
         if(nbytes > 0){
             confirmacao[nbytes] = '\0';
             confirmacao[strcspn(confirmacao, "\n")] = 0;
@@ -58,9 +62,20 @@ int executaComando(char* comando, User* user){
             unlink(user->fifo_privado);
             exit(EXIT_FAILURE);
         }
-        
-        
-    }else{
+    }else if(strcmp(comando,"agendar") == 0 && user->ativo == 1){
+        printf("Agendar comando recebido.\n");
+    }else if(strcmp(comando,"cancelar") == 0 && user->ativo == 1){
+        printf("Cancelar comando recebido.\n");
+    }else if(strcmp(comando,"consultar") == 0 && user->ativo == 1){
+        printf("Consultar comando recebido.\n");
+    }else if(strcmp(comando,"entrar") == 0 && user->ativo == 1){
+        printf("Entrar comando recebido.\n");
+    }else if(strcmp(comando,"sair") == 0 && user->ativo == 1){
+        printf("Sair comando recebido.\n");
+    }else if(strcmp(comando,"terminar") == 0 && user->ativo == 1){
+        printf("Terminar comando recebido.\n");
+    }
+    else{
         printf("Comando desconhecido.\n");
     }
     return 0;
@@ -118,8 +133,11 @@ int main(int argc, char* argv[]){
     executaComando("LOGIN",&user);
     
     while(loop){
-        //
-        break;
+        printf("\n> ");
+        char comando[30];
+        scanf("%s",comando);
+        executaComando(comando,&user);
+
     }
 
     close(fd);
