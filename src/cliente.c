@@ -2,6 +2,8 @@
 
 int loop=1;
 
+
+
 void handleSinal(int sinal, siginfo_t *info, void *context){
     if(sinal == SIGINT){
         printf("\nSIGINT\n");
@@ -9,83 +11,14 @@ void handleSinal(int sinal, siginfo_t *info, void *context){
     }
 }
 
-int executaComando(char* comando, User* user){
-    if(strcmp(comando,"LOGIN") == 0){
-        if(user->ativo == 1){
-            printf("Ja esta logado.\n");
-            return 0;
-        }
-        char login[150], confirmacao[5];
-        int nbytes;
-
-        //ABERTURA DO PIPE DO CONTROLADOR
-
-        int fd_ctrl = open(PIPE_CONTROLADOR,O_WRONLY);
-        if(fd_ctrl == -1){
-            perror("Erro ao abrir pipe do controlador a partir do cliente.");
-            exit(EXIT_FAILURE);
-        }
-
-        //comando a enviar
-        sprintf(login, "LOGIN %s %s %d", user->nome, user->fifo_privado, getpid());
-        printf("A enviar: %s\n",login);
-
-        nbytes = write(fd_ctrl,&login,strlen(login));
-        close(fd_ctrl);
-        if(nbytes == -1){
-            perror("Erro ao dar login com o cliente.");
-            close(user->fd);
-            unlink(user->fifo_privado);
-            exit(EXIT_FAILURE);
-        }
-
-        //RECEBER CONFIRMACAO DO LOGIN DO CONTROLADOR
-
-        nbytes = read(user->fd,&confirmacao,sizeof(confirmacao));
-
-        if(nbytes > 0){
-            confirmacao[nbytes] = '\0';
-            confirmacao[strcspn(confirmacao, "\n")] = 0;
-
-            if(strcmp(confirmacao, LOGIN_SUCESSO) == 0){ 
-                printf("Login efetuado com sucesso!\n");
-                user->ativo = 1;
-            } else {
-                printf("[ERRO] Login recusado pelo servidor. Resposta: '%s'\n", confirmacao);
-                close(user->fd);
-                unlink(user->fifo_privado);
-                exit(EXIT_FAILURE); 
-            }
-        } else {
-            perror("[ERRO] Falha ao ler resposta ou EOF");
-            close(user->fd);
-            unlink(user->fifo_privado);
-            exit(EXIT_FAILURE);
-        }
-    }else if(strcmp(comando,"agendar") == 0 && user->ativo == 1){
-        printf("Agendar comando recebido.\n");
-    }else if(strcmp(comando,"cancelar") == 0 && user->ativo == 1){
-        printf("Cancelar comando recebido.\n");
-    }else if(strcmp(comando,"consultar") == 0 && user->ativo == 1){
-        printf("Consultar comando recebido.\n");
-    }else if(strcmp(comando,"entrar") == 0 && user->ativo == 1){
-        printf("Entrar comando recebido.\n");
-    }else if(strcmp(comando,"sair") == 0 && user->ativo == 1){
-        printf("Sair comando recebido.\n");
-    }else if(strcmp(comando,"terminar") == 0 && user->ativo == 1){
-        printf("Terminar comando recebido.\n");
-    }
-    else{
-        printf("Comando desconhecido.\n");
-    }
-    return 0;
-}
-
-
 int main(int argc, char* argv[]){
-
     
+    setbuf(stdout,NULL);
+
     User user;
+    char buffer_teclado[MAX_STR];
+    char buffer_pipe[MAX_STR];
+    char msg_envio[MAX_STR*2];
 
     if(argc!=2){
         printf("Numero de argumentos errrado.\n O correto seria ./cliente pedro\n");
@@ -106,7 +39,6 @@ int main(int argc, char* argv[]){
     sigaction(SIGINT, &sa, NULL);
     
     //INICIALIZACAO DO USER
-    
     memset(&user,0,sizeof(User));
     strcpy(user.nome,argv[1]);
     sprintf(user.fifo_privado,PIPE_CLIENTE,user.nome);
@@ -128,16 +60,93 @@ int main(int argc, char* argv[]){
         exit(EXIT_FAILURE);
     }
 
-    user.fd = fd;    
     // LOGIN
-    executaComando("LOGIN",&user);
+    int fd_ctrl = open(PIPE_CONTROLADOR, O_WRONLY);
+    if(fd_ctrl == -1){
+        perror("Erro ao abrir pipe controlador");
+        close(fd);
+        unlink(user.fifo_privado);
+        exit(1);
+    }
     
-    while(loop){
-        printf("\n> ");
-        char comando[30];
-        scanf("%s",comando);
-        executaComando(comando,&user);
 
+    sprintf(msg_envio, "LOGIN %s %s %d", user.nome, user.fifo_privado, user.pid_cliente);
+    write(fd_ctrl, msg_envio, strlen(msg_envio));
+
+
+    // ESPERAR RESPOSTA DO CONTROLADOR
+    int n = read(fd, buffer_pipe, sizeof(buffer_pipe));
+    if(n > 0){
+        buffer_pipe[n] = '\0';
+        if(strncmp(buffer_pipe, LOGIN_SUCESSO, 2) == 0){
+            printf("Login com sucesso! Podes escrever comandos.\n");
+            user.ativo = 1;
+        } else {
+            printf("Login recusado: %s\n", buffer_pipe);
+            close(fd); 
+            close(fd_ctrl); 
+            unlink(user.fifo_privado);
+            return 1;
+        }
+    } else {
+        printf("Erro ao receber resposta de login.\n");
+         close(fd); 
+            close(fd_ctrl); 
+            unlink(user.fifo_privado);
+            return 1;
+    }
+
+    printf("[SUCESSO] Login aceite!\n");
+
+    fd_set read_fds;
+    int max_fd = fd;
+
+    printf("> ");
+
+    while(loop){
+        FD_ZERO(&read_fds);
+        FD_SET(STDIN_FILENO, &read_fds); 
+        FD_SET(fd, &read_fds);      
+        
+
+        int atividade = select(max_fd + 1, &read_fds, NULL, NULL, NULL);
+
+        if(atividade < 0 && errno != EINTR) break;
+        if(!loop) break;
+
+        // Mensagens do Controlador
+        if(FD_ISSET(fd, &read_fds)){
+            int nbytes = read(fd, buffer_pipe, sizeof(buffer_pipe)-1);
+            if(nbytes > 0){
+                buffer_pipe[nbytes] = '\0';
+                printf("\n[RECEBIDO]: %s\n> ", buffer_pipe);
+            }
+        }
+
+        //Comandos do Utilizador
+        if(FD_ISSET(STDIN_FILENO, &read_fds)){
+            if(fgets(buffer_teclado, sizeof(buffer_teclado), stdin)){
+                buffer_teclado[strcspn(buffer_teclado, "\n")] = 0; // Remove \n
+
+                if(strcmp(buffer_teclado, "sair") == 0){
+                    loop = 0;
+                }
+                else if(strlen(buffer_teclado) > 0){
+                    char cmd[MAX_STR], args[MAX_STR];
+                    args[0] = '\0';
+                    int res = sscanf(buffer_teclado, "%s %[^\n]", cmd, args);
+
+                    if(res >= 1){
+                        if(res == 1) sprintf(msg_envio, "%s %s", cmd, user.nome);
+                        else sprintf(msg_envio, "%s %s %s", cmd, user.nome, args);
+                        
+                        write(fd_ctrl, msg_envio, strlen(msg_envio));
+                    }
+                } 
+                printf("> ");
+                fflush(stdout);
+            }
+        }
     }
 
     close(fd);

@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <pthread.h>
+#include <sys/select.h>
 
 // --- Constantes ---
 #define MAX_USERS 30
@@ -51,7 +52,7 @@ typedef struct User{
 typedef struct Servico{
     int id;
     int hora_agendada;
-    int distacia;
+    int distancia;
     char origem[MAX_STR];
     char destino[MAX_STR];
     int estado; // 0 - agendado, 1 - em curso, 2 - concluido
@@ -63,7 +64,7 @@ typedef struct Veiculo{
     int id_servico;
     int estado;
     pid_t pid_veiculo;
-
+    int fd_leitura;
 } Veiculo;
 
 typedef struct TUserInfo {
@@ -80,6 +81,6 @@ typedef struct TControlInfo {
 
 
 // --- Funções ----
-void listaUsers(User* users, int nUsers);
-int existeEAdicionaUser(User* users, int* nUsers, char* nome);
+void listaUsers();
+int existeEAdicionaUser(char* nome, char* fifo, pid_t pid);
 

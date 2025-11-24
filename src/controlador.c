@@ -19,7 +19,7 @@ Veiculo frota[MAX_VEICULOS];
 pthread_mutex_t users_mutex;
 
 
-void listaUsers(User* users, int nUsers){
+void listaUsers(){
     printf("\n--- LISTA DE UTILIZADORES ---\n");
     for(int i = 0; i < nUsers; i++){
         printf("%d. %s (PID: %d)\n", i+1, users[i].nome, users[i].pid_cliente);
@@ -32,19 +32,71 @@ void listaUsers(User* users, int nUsers){
 // Return 1 - erro genérico
 // Return 2 - já existe
 // Return 3 - lista cheia
-int existeEAdicionaUser(User* users, int* nUsers, char* nome){
-    if(*nUsers < 0) return 1;
-    if(*nUsers >= MAX_USERS) return 3;
+int existeEAdicionaUser(char* nome, char* fifo, pid_t pid){
+    if(nUsers >= MAX_USERS) return 3;
     
-    for(int i = 0; i < *nUsers; i++){
+    for(int i = 0; i < nUsers; i++){
         if(strcmp(users[i].nome, nome) == 0)
             return 2; // Já existe
     }
 
     // Adiciona novo utilizador
-    strcpy(users[*nUsers].nome, nome);
-    (*nUsers)++; // Incrementa o contador global
+    strcpy(users[nUsers].nome, nome);
+    strcpy(users[nUsers].fifo_privado, fifo); 
+    users[nUsers].pid_cliente = pid;
+    users[nUsers].ativo = 1;
+    nUsers++; // Incrementa o contador global
     return 0;
+}
+
+// Envia resposta sem bloquear
+void enviaResposta(char* nome_user, char* msg){
+    char fifo[MAX_PIPE];
+    fifo[0] = '\0';
+
+    for(int i=0; i<nUsers; i++){
+        if(users[i].ativo && strcmp(users[i].nome, nome_user) == 0){
+            strcpy(fifo, users[i].fifo_privado);
+            break;
+        }
+    }
+
+    if(strlen(fifo) > 0){
+        int fd = open(fifo, O_WRONLY); 
+        if(fd != -1){
+            write(fd, msg, strlen(msg));
+            close(fd);
+        }
+    }
+}
+
+
+// --- TRATAMENTO DE COMANDOS ---
+void tratarComandoCliente(char* cmd, char* nome, char* args) {
+    
+    if (strcmp(cmd, "LOGIN") == 0) {
+        char fifo[MAX_PIPE];
+        int pid;
+        sscanf(args, "%s %d", fifo, &pid);
+        
+        int res = existeEAdicionaUser(nome, fifo, pid);
+        char resposta[MAX_STR];
+        
+        if(res == 0 || res == 2) strcpy(resposta, LOGIN_SUCESSO);
+        else strcpy(resposta, "ERRO: Cheio");
+
+        int fd_c = open(fifo, O_WRONLY);
+        if(fd_c != -1){
+            write(fd_c, resposta, strlen(resposta));
+            close(fd_c);
+        }
+        printf("\n[LOGIN] User: %s\nAdmin> ", nome);
+        fflush(stdout);
+    }
+    else {
+        printf("\n[AVISO] Comando desconhecido: %s\nAdmin> ", cmd);
+        fflush(stdout);
+    }
 }
 
 void handleSinal(int sinal, siginfo_t *info, void *context){
@@ -55,7 +107,7 @@ void handleSinal(int sinal, siginfo_t *info, void *context){
     }
     if(sinal == SIGALRM){
         tempo++;
-        alarm(1); // Re-agendar o alarme
+        alarm(1); 
     }
 }
 
@@ -73,15 +125,16 @@ void processar_comando_admin(char* buffer) {
     int args = sscanf(buffer, "%s %d", comando, &id_cancelar);
     if (args <= 0) return;
 
+    // CORREÇÃO THREADS: Acede diretamente à memória protegida
+    pthread_mutex_lock(&users_mutex);
+
     if (strcmp(comando, "listar") == 0) {
         // TODO: Implementar listagem de serviços
         printf("Comando listar (servicos) - A implementar\n");
     }
     else if (strcmp(comando, "utiliz") == 0) {
-        // CORREÇÃO THREADS: Acede diretamente à memória protegida
-        pthread_mutex_lock(&users_mutex);
-        listaUsers(users, nUsers);
-        pthread_mutex_unlock(&users_mutex);
+
+        listaUsers();
     }
     else if (strcmp(comando, "frota") == 0) {
         printf("Comando frota - A implementar\n");
@@ -102,9 +155,9 @@ void processar_comando_admin(char* buffer) {
     else {
         printf("Comando desconhecido: %s\n", comando);
     }
+    fflush(stdout);
+    pthread_mutex_unlock(&users_mutex);
 }
-
-
 
 
 // --- Thread: Processamento de Clientes ---
@@ -120,10 +173,7 @@ void* tUsers(void* arg) {
     // Variáveis locais
     char buffer_msg[256];
     char conf[5];
-    char cmd[20], nome[MAX_STR], fifo_nome[MAX_PIPE];
-    pid_t pid_cli;
-    
-    printf("[THREAD - USER] Clientes iniciada. À espera de dados no FIFO...\n");
+    char cmd[20], nome[MAX_STR], args[MAX_STR * 2];
 
     while (*loop_ptr) { 
         int nbytes = read(fd_leitura_fifo, buffer_msg, sizeof(buffer_msg) - 1);
@@ -131,50 +181,26 @@ void* tUsers(void* arg) {
         if (nbytes > 0) {
             buffer_msg[nbytes] = '\0'; 
             
-            int res_scan = sscanf(buffer_msg, "%s %s %s %d", cmd, nome, fifo_nome, &pid_cli);
+            
+            int res_scan = sscanf(buffer_msg, "%s %s %[^\n]", cmd, nome, args);
             printf("[THREAD-USER] MENSAGEM RECEBIDA: %s\n", buffer_msg);
 
-            if (res_scan == 4 && strcmp(cmd, "LOGIN") == 0) {
-                
-                // PROTEÇÃO (LOCK)
-                pthread_mutex_lock(mutex);
-                
-                if (existeEAdicionaUser(users, &nUsers, nome) == 0) {
-                    //Copia as informacoes para o array de clientes 
-                    strcpy(users[nUsers - 1].fifo_privado, fifo_nome);
-                    users[nUsers - 1].pid_cliente = pid_cli;
-                    strcpy(conf, LOGIN_SUCESSO);
-                } else {
-                    strcpy(conf, "ERRO"); 
-                }
-                
-                // DESBLOQUEAR
-                pthread_mutex_unlock(mutex); 
-
-                //Envia para o cliente a confirmacao
-
-                int fd_cliente = open(fifo_nome, O_WRONLY); 
-                if (fd_cliente != -1) {
-                    write(fd_cliente, conf, strlen(conf));
-                    close(fd_cliente);
-                } else {
-                    printf("[ERRO] Nao conseguiu abrir FIFO de resposta %s.\n", fifo_nome);
-                }
-                
-                printf("[LOGIN] %s -> Resultado: %s\n", nome, conf);
-                
-            } else {
-                // Aqui pode tratar AGENDAR, CANCELAR, etc.
-                if (nbytes > 1) printf("[AVISO] Comando desconhecido: %s\n", buffer_msg);
+            if(res_scan < 2) {
+                printf("\nMsg invalida: %s\nAdmin> ", buffer_msg);
+                continue;
             }
-        } 
+
+            // PROTEÇÃO (LOCK)
+            pthread_mutex_lock(mutex);
+            tratarComandoCliente(cmd, nome, args);
+            // LIBERTAR (UNLOCK)
+            pthread_mutex_unlock(mutex);    
+            } 
         else if (nbytes == -1 && errno != EINTR) {
             perror("[ERRO] Leitura do FIFO principal");
-            sleep(1); // Evita spam em caso de erro
+            sleep(1);
         }
     }
-    
-    printf("[THREAD] Clientes a terminar.\n");
     close(fd_leitura_fifo);
     return NULL;
 }
@@ -187,10 +213,11 @@ void* tControl(void* arg) {
     // Variáveis locais
     char buffer[MAX_STR];
     
-    printf("[THREAD - CONTROL] Thread control iniciada. À espera de dados no FIFO...\n");
+    printf("[THREAD - CONTROL] Thread control iniciada.\n");
+    fflush(stdout);
 
     while(info->loop_ptr){
-        printf("\nAdmin> ");
+        printf("Admin> ");
         if(fgets(buffer, sizeof(buffer), stdin) == NULL){
             if (errno == EINTR) continue;
             loop = 0; // EOF (Ctrl+D)
@@ -206,19 +233,16 @@ void* tControl(void* arg) {
 
 // --- MAIN ---
 int main(){
-    int fd_pipe_controlador; 
-    
     setbuf(stdout,NULL);
 
     char* s_nveiculos = getenv("NVEICULOS");
-    if(s_nveiculos == NULL) {
+    if(s_nveiculos == NULL) 
         max_veiculos = MAX_VEICULOS; 
-    } else {
+    else {
         max_veiculos = atoi(s_nveiculos); 
         if (max_veiculos <= 0) max_veiculos = MAX_VEICULOS;
-        
         if (max_veiculos > MAX_VEICULOS) {
-            printf("AVISO: NVEICULOS (%d) excede o limite compilado. A usar %d.\n", max_veiculos, MAX_VEICULOS);
+            printf("AVISO: NVEICULOS (%d) excede o limite. A usar %d.\n", max_veiculos, MAX_VEICULOS);
             max_veiculos = MAX_VEICULOS;
         }
     }
@@ -244,14 +268,12 @@ int main(){
 
     // Abrir FIFO (O_RDONLY bloqueia até um cliente abrir para escrita, 
     // ou usamos O_RDWR para manter aberto sem clientes - truque comum)
-    fd_pipe_controlador = open(PIPE_CONTROLADOR, O_RDWR); 
+    int fd_pipe_controlador = open(PIPE_CONTROLADOR, O_RDWR); 
     if(fd_pipe_controlador == -1){
         perror("Erro fatal ao abrir FIFO");
         unlink(PIPE_CONTROLADOR);
         exit(EXIT_FAILURE);
-    }else{
-        printf("PIPE CONTROLADOR FOI ABERTO\n");
-    }
+    };
 
     // 4. Iniciar Tempo e Mutex
     alarm(1);
@@ -313,4 +335,4 @@ int main(){
     pthread_mutex_destroy(&users_mutex);
     
     return 0;
-}
+} 
