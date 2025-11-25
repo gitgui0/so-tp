@@ -129,8 +129,6 @@ void tratarComandoCliente(char* cmd, char* nome, char* args) {
         //destino?
         sscanf(args, "%d %s %d", &novo.hora_agendada,  novo.origem, &novo.distancia);
 
-        printf("\n[AGENDAR] Novo servico agendado por %s: Hora %d, Origem %s, Distancia %dkm", nome, novo.hora_agendada, novo.origem, novo.distancia);
-
         novo.id = nServicos + 1;
         novo.estado = SERV_AGENDADO;
         novo.pid_cliente = devolveUserPorNome(nome)->pid_cliente;
