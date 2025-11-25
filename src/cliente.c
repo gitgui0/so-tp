@@ -79,7 +79,7 @@ int main(int argc, char* argv[]){
     if(n > 0){
         buffer_pipe[n] = '\0';
         if(strncmp(buffer_pipe, LOGIN_SUCESSO, 2) == 0){
-            printf("Login com sucesso! Podes escrever comandos.\n");
+            printf("[SUCESSO] Login aceite!\n");
             user.ativo = 1;
         } else {
             printf("Login recusado: %s\n", buffer_pipe);
@@ -96,7 +96,7 @@ int main(int argc, char* argv[]){
             return 1;
     }
 
-    printf("[SUCESSO] Login aceite!\n");
+    
 
     fd_set read_fds;
     int max_fd = fd;
@@ -105,8 +105,8 @@ int main(int argc, char* argv[]){
 
     while(loop){
         FD_ZERO(&read_fds);
-        FD_SET(STDIN_FILENO, &read_fds); 
-        FD_SET(fd, &read_fds);      
+        FD_SET(STDIN_FILENO, &read_fds); // le do teclado (cliente)
+        FD_SET(fd, &read_fds); // le do pipe privado (controlador)
         
 
         int atividade = select(max_fd + 1, &read_fds, NULL, NULL, NULL);

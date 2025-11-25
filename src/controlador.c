@@ -19,6 +19,25 @@ Veiculo frota[MAX_VEICULOS];
 pthread_mutex_t users_mutex;
 
 
+User* devolveUserPorNome(char* nome){
+    for(int i = 0; i < nUsers; i++){
+        if(strcmp(users[i].nome, nome) == 0){
+            return &users[i];
+        }
+    }
+    return NULL;
+}
+
+User* devolveUserPorPID(pid_t pid){
+    for(int i = 0; i < nUsers; i++){
+        if(users[i].pid_cliente == pid){
+            return &users[i];
+        }
+    }
+    return NULL;
+}
+
+
 void listaUsers(){
     printf("\n--- LISTA DE UTILIZADORES ---\n");
     for(int i = 0; i < nUsers; i++){
@@ -26,6 +45,15 @@ void listaUsers(){
     }
     printf("-----------------------------\n");
 }
+
+void listaServicos(){
+    printf("\n--- LISTA DE SERVICOS ---\n");
+    for(int i = 0; i < nServicos; i++){
+        printf("(ID: %d) %d - %dkm -  %s , Estado: %d, Para %s (%d)\n",servicos[i].id, servicos[i].hora_agendada, servicos[i].distancia, servicos[i].origem, servicos[i].estado,devolveUserPorPID(servicos[i].pid_cliente)->nome, servicos[i].pid_cliente);
+    }
+    printf("-----------------------------\n");
+}
+
 
 
 // Return 0 - sucesso
@@ -90,13 +118,33 @@ void tratarComandoCliente(char* cmd, char* nome, char* args) {
             write(fd_c, resposta, strlen(resposta));
             close(fd_c);
         }
-        printf("\n[LOGIN] User: %s\nAdmin> ", nome);
-        fflush(stdout);
+        printf("\n[LOGIN] User: %s", nome);
+
+    }
+    else if(strcmp(cmd,"agendar") == 0){
+        Servico novo;
+        memset(&novo, 0, sizeof(Servico));
+
+        
+        //destino?
+        sscanf(args, "%d %s %d", &novo.hora_agendada,  novo.origem, &novo.distancia);
+
+        printf("\n[AGENDAR] Novo servico agendado por %s: Hora %d, Origem %s, Distancia %dkm", nome, novo.hora_agendada, novo.origem, novo.distancia);
+
+        novo.id = nServicos + 1;
+        novo.estado = SERV_AGENDADO;
+        novo.pid_cliente = devolveUserPorNome(nome)->pid_cliente;
+        novo.pid_veiculo = -1; // por agora
+        servicos[nServicos] = novo;
+        nServicos++;
+
     }
     else {
-        printf("\n[AVISO] Comando desconhecido: %s\nAdmin> ", cmd);
-        fflush(stdout);
+        printf("\n[AVISO] Comando desconhecido: %s", cmd);
+
     }
+    printf("\nAdmin> ");
+    fflush(stdout);
 }
 
 void handleSinal(int sinal, siginfo_t *info, void *context){
@@ -129,11 +177,9 @@ void processar_comando_admin(char* buffer) {
     pthread_mutex_lock(&users_mutex);
 
     if (strcmp(comando, "listar") == 0) {
-        // TODO: Implementar listagem de serviços
-        printf("Comando listar (servicos) - A implementar\n");
+        listaServicos();
     }
     else if (strcmp(comando, "utiliz") == 0) {
-
         listaUsers();
     }
     else if (strcmp(comando, "frota") == 0) {
@@ -170,6 +216,8 @@ void* tUsers(void* arg) {
     
     free(arg); // Liberta a memória da struct alocada na main
 
+    printf("\n[THREAD - CLIENTE] Thread cliente iniciada.\n");
+
     // Variáveis locais
     char buffer_msg[256];
     char conf[5];
@@ -183,7 +231,7 @@ void* tUsers(void* arg) {
             
             
             int res_scan = sscanf(buffer_msg, "%s %s %[^\n]", cmd, nome, args);
-            printf("[THREAD-USER] MENSAGEM RECEBIDA: %s\n", buffer_msg);
+            printf("\n[THREAD-USER] MENSAGEM RECEBIDA: %s\n", buffer_msg);
 
             if(res_scan < 2) {
                 printf("\nMsg invalida: %s\nAdmin> ", buffer_msg);
@@ -213,7 +261,7 @@ void* tControl(void* arg) {
     // Variáveis locais
     char buffer[MAX_STR];
     
-    printf("[THREAD - CONTROL] Thread control iniciada.\n");
+    printf("\n[THREAD - CONTROL] Thread control iniciada.\n");
     fflush(stdout);
 
     while(info->loop_ptr){
