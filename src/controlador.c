@@ -367,6 +367,13 @@ int main(){
 
     // 7. Encerramento
     printf("\nA encerrar o sistema...\n");
+
+    // Fechar a sessao dos clientes que ainda estavam ativos
+    for(int i = 0; i < nUsers; i++){
+        if(users[i].ativo){
+            kill(users[i].pid_cliente, SIGINT);
+        }
+    }
     
     // 1. Cancelar a thread de Clientes (que está bloqueada no read do FIFO)
     pthread_cancel(clientes_tid); 
