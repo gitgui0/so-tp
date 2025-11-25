@@ -49,7 +49,14 @@ void listaUsers(){
 void listaServicos(){
     printf("\n--- LISTA DE SERVICOS ---\n");
     for(int i = 0; i < nServicos; i++){
-        printf("(ID: %d) %d - %dkm -  %s , Estado: %d, Para %s (%d)\n",servicos[i].id, servicos[i].hora_agendada, servicos[i].distancia, servicos[i].origem, servicos[i].estado,devolveUserPorPID(servicos[i].pid_cliente)->nome, servicos[i].pid_cliente);
+        printf("(ID: %d) %d - %dkm -  %s - Estado: ",servicos[i].id, servicos[i].hora_agendada, servicos[i].distancia, servicos[i].origem);
+        if(servicos[i].estado == SERV_AGENDADO)
+            printf("Agendado ");
+        else if(servicos[i].estado == SERV_EM_CURSO)
+            printf("Em curso ");
+        else if(servicos[i].estado == SERV_CONCLUIDO)
+            printf("Concluido ");
+        printf("- Para %s (%d)\n",devolveUserPorPID(servicos[i].pid_cliente)->nome, servicos[i].pid_cliente);
     }
     printf("-----------------------------\n");
 }
