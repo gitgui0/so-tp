@@ -15,6 +15,10 @@ int nServicos = 0;
 
 Veiculo frota[MAX_VEICULOS];
 
+//Threads
+pthread_t control_tid;
+pthread_t clientes_tid;
+
 // Sincronização
 pthread_mutex_t users_mutex;
 
@@ -155,7 +159,8 @@ void tratarComandoCliente(char* cmd, char* nome, char* args) {
 void handleSinal(int sinal, siginfo_t *info, void *context){
     (void)info; (void)context; // Silenciar warnings de variaveis nao usadas
     if(sinal == SIGINT){
-        printf("\n[SINAL] SIGINT recebido. A terminar...\n");
+        printf("\n[SINAL] SIGINT recebido.\n");
+        pthread_cancel(control_tid);
         loop = 0;
     }
     if(sinal == SIGALRM){
@@ -200,7 +205,6 @@ void processar_comando_admin(char* buffer) {
         printf("A cancelar servico ID %d (A implementar logicamente)\n", id_cancelar);
     }
     else if (strcmp(comando, "terminar") == 0) {
-        printf("A terminar sistema...\n");
         loop = 0;
     }
     else {
@@ -277,6 +281,11 @@ void* tControl(void* arg) {
             break;     
         }
         processar_comando_admin(buffer);
+
+        // no caso de ter sido o comando termina
+        if(loop==0){
+            break;
+        }
     }
     
     printf("[THREAD] Thread control a terminar.\n");
@@ -343,8 +352,7 @@ int main(){
     args_user->fd_pipe = fd_pipe_controlador;
     args_user->loop_ptr = &loop;
     args_user->users_mutex_ptr = &users_mutex;
-    
-    pthread_t clientes_tid;
+
     if (pthread_create(&clientes_tid, NULL, tUsers, (void*)args_user) != 0) {
         perror("Erro ao criar thread para clientes.");
         exit(1);
@@ -360,18 +368,21 @@ int main(){
 
     args_control->loop_ptr=&loop; // nao e para tar assim acho eu
 
-    pthread_t control_tid;
+    
     if (pthread_create(&control_tid, NULL, tControl, (void*)args_control) != 0) {
         perror("Erro ao criar thread para controlo do controlador");
         exit(1);
     }
 
-    while(loop){
-        sleep(1);
-    }
 
-    // 7. Encerramento
-    printf("\nA encerrar o sistema...\n");
+    
+
+    // pthread_cancel so para o ctrl c
+    pthread_join(control_tid, NULL);
+
+    // Cancelar a thread de clientes (que está bloqueada a ler o named pipe)
+    pthread_cancel(clientes_tid); 
+    pthread_join(clientes_tid, NULL);
 
     // Fechar a sessao dos clientes que ainda estavam ativos
     for(int i = 0; i < nUsers; i++){
@@ -380,14 +391,6 @@ int main(){
         }
     }
     
-    // 1. Cancelar a thread de Clientes (que está bloqueada no read do FIFO)
-    pthread_cancel(clientes_tid); 
-    pthread_join(clientes_tid, NULL);
-
-    // 2. Cancelar a thread de Controlo (que está bloqueada no fgets do Stdin)
-    // O pthread_cancel é a única forma de interromper o fgets bloqueante
-    pthread_cancel(control_tid);
-    pthread_join(control_tid, NULL);
     
     // 3. Limpeza Final
     close(fd_pipe_controlador);
