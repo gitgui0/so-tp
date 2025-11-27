@@ -54,7 +54,6 @@ typedef struct Servico{
     int hora_agendada;
     int distancia;
     char origem[MAX_STR];
-    char destino[MAX_STR];
     int estado; // 0 - agendado, 1 - em curso, 2 - concluido
     pid_t pid_cliente;
     pid_t pid_veiculo;
@@ -75,6 +74,7 @@ typedef struct TUserInfo {
 
 typedef struct TControlInfo {
     volatile int *loop_ptr; 
+    pthread_mutex_t *servicos_mutex_ptr;
     /// mais coisas provavelmente
 } TControlInfo;
 

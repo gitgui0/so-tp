@@ -7,20 +7,23 @@ volatile int tempo = 0;
 // Dados partilhados entre threads
 User users[MAX_USERS]; 
 int nUsers = 0;
-int max_veiculos = 0;
 
 // Array para Serviços e Frota
 Servico servicos[MAX_SERVICOS];
 int nServicos = 0;
+int max_veiculos;
 
 Veiculo frota[MAX_VEICULOS];
+int nVeiculos = 0;
 
 //Threads
 pthread_t control_tid;
 pthread_t clientes_tid;
+pthread_t tempo_tid;
 
 // Sincronização
 pthread_mutex_t users_mutex;
+pthread_mutex_t servicos_mutex;
 
 
 User* devolveUserPorNome(char* nome){
@@ -86,6 +89,17 @@ int existeEAdicionaUser(char* nome, char* fifo, pid_t pid){
     users[nUsers].ativo = 1;
     nUsers++; // Incrementa o contador global
     return 0;
+}
+
+
+// -1 - nenhum veiculo livre
+int devolveVeiculoLivre(){
+    for(int i = 0; i < nVeiculos; i++){
+        if(frota[i].estado == VEICULO_LIVRE){
+            return i; 
+        }
+    }
+    return -1; 
 }
 
 // Envia resposta sem bloquear
@@ -187,7 +201,9 @@ void processar_comando_admin(char* buffer) {
     pthread_mutex_lock(&users_mutex);
 
     if (strcmp(comando, "listar") == 0) {
+        pthread_mutex_lock(&servicos_mutex);
         listaServicos();
+        pthread_mutex_unlock(&servicos_mutex);
     }
     else if (strcmp(comando, "utiliz") == 0) {
         listaUsers();
@@ -292,6 +308,77 @@ void* tControl(void* arg) {
     return NULL;
 }
 
+void* tTempo(void* arg){
+
+    while(loop){
+        // so para testar
+        printf("\n%d", tempo);
+        // Verificar para todos os servicos, se o tempo chegou a hora do servico
+        for(int i = 0; i < nServicos; i++){
+            // <= ou == ?
+            // meti <= so para estar seguro
+            if(servicos[i].estado == SERV_AGENDADO && servicos[i].hora_agendada <= tempo){  
+                // Iniciar servico
+                int idx = devolveVeiculoLivre();
+                // Nao ha nehum veiculo lvire, tentamos criar um, se der
+                // Falta PIPES para o veiculo e controlador se comunicarem
+                if(idx == -1){
+                    if(nVeiculos >= max_veiculos){
+                        printf("Nao ha veiculos livres e ja atingimos o maximo de veiculos (%d)\n", max_veiculos);
+                        continue;
+                    } else {
+                        Veiculo novo;
+                        memset(&novo, 0, sizeof(Veiculo));
+
+                        novo.id_servico = servicos[i].id;
+                        novo.estado = VEICULO_OCUPADO;
+
+
+                        pid_t pid = fork();
+
+                        if(pid == -1){
+                            perror("Erro ao criar processo veiculo");
+                            continue;
+                        }
+                        // Processo Filho - Veiculo
+                        else if(pid== 0){
+                            
+                            // Argumentos
+                            // ./veiculo <id> <origem> <distancia> <fifo_cliente>
+
+                            char str_id[20];
+                            char str_distancia[20];
+                            char str_fd[100];
+
+                            sprintf(str_id, "%d", servicos[i].id);
+                            sprintf(str_distancia, "%d", servicos[i].distancia);
+
+                            strcpy(str_fd, "-1"); 
+
+                            // E a chamada deve usar:
+                            execl("./veiculo", "veiculo", str_id, servicos[i].origem, str_distancia, str_fd, NULL);
+                            
+                            perror("[ERRO CRITICO] execl falhou");
+                            exit(EXIT_FAILURE);
+                        }
+                        // Processo Pai - Controlador
+                        else{
+                            novo.pid_veiculo = pid;
+                            novo.fd_leitura = -1;
+
+                            frota[nVeiculos] = novo;
+                            nVeiculos++;
+
+                            servicos[i].pid_veiculo = pid;
+                            servicos[i].estado = SERV_EM_CURSO;
+                        }
+                    }
+                }
+           }
+        }
+        sleep(1); // NAO TENHO A CERTEZA DISOT MAS ACHO QUE FAZ SENTIDO
+    }
+}
 
 // --- MAIN ---
 int main(){
@@ -340,6 +427,7 @@ int main(){
     // 4. Iniciar Tempo e Mutex
     alarm(1);
     pthread_mutex_init(&users_mutex, NULL);
+    pthread_mutex_init(&servicos_mutex, NULL);
 
     // 5. Lançar Thread Clientes
     TUserInfo *args_user = (TUserInfo*)malloc(sizeof(TUserInfo)); 
@@ -367,9 +455,15 @@ int main(){
     }
 
     args_control->loop_ptr=&loop; // nao e para tar assim acho eu
+    args_control->servicos_mutex_ptr = &servicos_mutex;
 
     
     if (pthread_create(&control_tid, NULL, tControl, (void*)args_control) != 0) {
+        perror("Erro ao criar thread para controlo do controlador");
+        exit(1);
+    }
+
+    if (pthread_create(&tempo_tid, NULL, tTempo, NULL) != 0) {
         perror("Erro ao criar thread para controlo do controlador");
         exit(1);
     }
