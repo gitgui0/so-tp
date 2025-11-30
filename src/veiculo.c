@@ -13,24 +13,21 @@ int main(int argc, char* argv[]){
     int fd_ctrl = atoi(argv[4]);
     char* pipe_cliente = argv[5];
 
-    char msg_ctrl[MAX_STR];
-    sprintf(msg_ctrl, "Veiculo iniciado. Origem: %s, Distancia: %d km\n", origem, distanciaTotal); 
-
-    int nbytes = write(fd_ctrl, msg_ctrl, strlen(msg_ctrl));
-    if(nbytes == -1){
-        perror("Erro ao enviar mensagem ao controlador");
-        return 1;
-    }
-
-
+    
+    
+    
     int fd_cli = open(pipe_cliente, O_WRONLY);
     if(fd_cli == -1){
         perror("Erro ao abrir pipe do cliente");
         return 1;
     }
-
+    
+    char msg_ctrl[MAX_STR];
     char msg_cli[MAX_STR];
     int distanciaPercorrida = 0;
+
+    sprintf(msg_cli, "Veiculo iniciado. Origem: %s, Distancia: %d km\n", origem, distanciaTotal); 
+    write(fd_cli, msg_cli, strlen(msg_cli));
 
     while(distanciaPercorrida < distanciaTotal){
         sprintf(msg_cli, "Veiculo %d a caminho. Distancia: %d km de %d km\n", id, distanciaPercorrida, distanciaTotal);

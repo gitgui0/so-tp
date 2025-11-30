@@ -88,6 +88,18 @@ void listaServicos(){
     printf("-----------------------------\n");
 }
 
+void listaFrotaAtiva(){
+    printf("\n--- LISTA DE VEICULOS ATIVOS ---\n");
+    for(int i = 0; i < nVeiculos; i++){
+        if(frota[i].estado == VEICULO_OCUPADO){
+            printf("Veiculo(%d) - %.2f - %d km de %d km\n",
+            frota[i].pid_veiculo, (float)frota[i].distancia_percorrida / frota[i].distancia * 100,
+            frota[i].distancia_percorrida, frota[i].distancia);
+        }
+    }
+    printf("-----------------------------\n");
+}
+
 
 
 // Return 0 - sucesso
@@ -178,7 +190,6 @@ void tratarComandoCliente(char* cmd, char* nome, char* args) {
         novo.estado = SERV_AGENDADO;
         novo.pid_cliente = devolveUserPorNome(nome)->pid_cliente;
         novo.pid_veiculo = -1;
-        novo.distancia_percorrida = 0;
         servicos[nServicos] = novo;
         nServicos++;
 
@@ -230,7 +241,7 @@ void processar_comando_admin(char* buffer) {
         listaUsers();
     }
     else if (strcmp(comando, "frota") == 0) {
-        printf("Comando frota - A implementar\n");
+        listaFrotaAtiva();
     }
     else if (strcmp(comando, "km") == 0) {
         printf("Comando km - A implementar\n");
@@ -384,8 +395,7 @@ void* tTempo(void* arg){
 
                             User* u = devolveUserPorPID(servicos[i].pid_cliente);
                             sprintf(pipe, "%s", u->fifo_privado);
-
-                            // E a chamada deve usar:
+                            
                             execl("./veiculo", "veiculo", str_id, servicos[i].origem, str_distancia, str_fd, pipe, NULL);
                             
                             perror("[ERRO CRITICO] execl falhou");
@@ -395,8 +405,12 @@ void* tTempo(void* arg){
                         else{
                             close(fd_v[1]); // fecha escrita
 
+                            novo.id_servico = servicos[i].id;
+                            novo.estado = VEICULO_OCUPADO;
                             novo.pid_veiculo = pid;
                             novo.fd_leitura = fd_v[0];
+                            novo.distancia = servicos[i].distancia;
+                            novo.distancia_percorrida = 0;
                             
                             int flags = fcntl(fd_v[0], F_GETFL, 0);
                             fcntl(fd_v[0], F_SETFL, flags | O_NONBLOCK);
@@ -410,6 +424,10 @@ void* tTempo(void* arg){
                             servicos[i].estado = SERV_EM_CURSO;
 
                             pthread_mutex_unlock(&servicos_mutex);
+
+                            User* u = devolveUserPorPID(servicos[i].pid_cliente);
+
+                            printf(" Veiculo (%d) iniciado para %s(%d) \n", novo.pid_veiculo, u->nome, u->pid_cliente);
                             
                         }
                     }
@@ -424,30 +442,40 @@ void* tTempo(void* arg){
 
 void *tTFrota(void* arg){
     while(loop){
-        printf("\n[THREAD FROTA] A verificar veiculos ocupados...\n");
         for(int i = 0; i < nVeiculos; i++){
             if(frota[i].estado == VEICULO_OCUPADO){
                 char buf[MAX_STR];
                 char msg[MAX_STR];
-                int distanciaAtual, idServico;
-                
-                int nbytes = read(frota[i].fd_leitura, buf, sizeof(buf));
-                sscanf(buf, "%s %d %d", msg, &distanciaAtual, &idServico);
+                int distanciaAtual, idServico = frota[i].id_servico;
 
-                printf("\n[THREAD FROTA] msg: %s \t atual:%d \t servico: %d \n", msg, distanciaAtual, idServico);
+                Servico* s = devolveServicoPorID(idServico);
+                User* u = devolveUserPorPID(s->pid_cliente);
+
+                /// caso para mensagem de progresso
+                int nbytes = read(frota[i].fd_leitura, buf, sizeof(buf));
+                sscanf(buf, "%s %d", msg, &distanciaAtual);
+
 
                 if(nbytes > 0){
                     msg[nbytes] = '\0';
 
                     if(strcmp(msg,VIAGEM_CONCLUIDA)==0){
                         frota[i].estado = VEICULO_LIVRE;
+ 
+                        if(s != NULL){
+                            s->estado = SERV_CONCLUIDO;
+
+                            frota[i].id_servico = -1;
+                            frota[i].distancia = 0;
+                            frota[i].estado = VEICULO_LIVRE;
+
+                            char resposta[MAX_STR];
+                            printf("[THREAD-FROTA] Veiculo (%d) concluiu a viagem do %s(%d)\n", frota[i].pid_veiculo, u->nome, u->pid_cliente);
+                        }
                     }else if(strcmp(msg,"PROGRESSO")==0){
-                        Servico* associado = devolveServicoPorID(idServico);
-                        if(associado != NULL){
-                            associado->distancia_percorrida = distanciaAtual;
-                        }     
+                        frota[i].distancia_percorrida = distanciaAtual;  
                     } else{
-                        printf("\n[VEICULO %d]: %s\n", frota[i].pid_veiculo, msg);
+                        printf("\n[THREAD-FROTA] [VEICULO %d para %s(%d)]: %s\n", frota[i].pid_veiculo, u->nome, u->pid_cliente, msg);
                     }
                 }
             }

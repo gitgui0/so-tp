@@ -55,7 +55,6 @@ typedef struct Servico{
     int id;
     int hora_agendada;
     int distancia;
-    int distancia_percorrida;
     char origem[MAX_STR];
     int estado; // 0 - agendado, 1 - em curso, 2 - concluido
     pid_t pid_cliente;
@@ -67,6 +66,8 @@ typedef struct Veiculo{
     int estado; // 0 - livre, 1 - ocupado
     pid_t pid_veiculo;
     int fd_leitura;
+    int distancia;
+    int distancia_percorrida;
 } Veiculo;
 
 typedef struct TUserInfo {

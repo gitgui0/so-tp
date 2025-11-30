@@ -128,7 +128,7 @@ int main(int argc, char* argv[]){
             if(fgets(buffer_teclado, sizeof(buffer_teclado), stdin)){
                 buffer_teclado[strcspn(buffer_teclado, "\n")] = 0; // Remove \n
 
-                if(strcmp(buffer_teclado, "sair") == 0){
+                if(strcmp(buffer_teclado, "terminar") == 0){
                     loop = 0;
                 }
                 else if(strlen(buffer_teclado) > 0){
