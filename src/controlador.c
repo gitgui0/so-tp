@@ -359,15 +359,19 @@ void* tTempo(void* arg){
 
     while(loop){
         // so para testar
-        printf("\n%d", tempo);
+        // printf("\n%d", tempo);
         // Verificar para todos os servicos, se o tempo chegou a hora do servico
        
-
+        
         for(int i = 0; i < nServicos; i++){
             // <= ou == ?
             // meti <= so para estar seguro
             
-            if(servicos[i].estado == SERV_AGENDADO && servicos[i].hora_agendada <= tempo){  
+            pthread_mutex_lock(&servicos_mutex);
+            if(servicos[i].estado == SERV_CONCLUIDO){
+                memset(&servicos[i], 0 , sizeof(Servico));
+                nServicos--;
+            }else if(servicos[i].estado == SERV_AGENDADO && servicos[i].hora_agendada <= tempo){  
                 // Iniciar servico
                 if(nVeiculos >= max_veiculos){
                     printf("Nao ha veiculos livres e ja atingimos o maximo de veiculos (%d)\n", max_veiculos);
@@ -421,12 +425,12 @@ void* tTempo(void* arg){
                         int flags = fcntl(fd_v[0], F_GETFL, 0);
                         fcntl(fd_v[0], F_SETFL, flags | O_NONBLOCK);
                         
-                        pthread_mutex_lock(&servicos_mutex);
+                        
                         frota[nVeiculos] = novo;
                         nVeiculos++;
                         servicos[i].pid_veiculo = pid;
                         servicos[i].estado = SERV_EM_CURSO;
-                        pthread_mutex_unlock(&servicos_mutex);
+                        
                         User* u = devolveUserPorPID(servicos[i].pid_cliente);
                         printf(" Veiculo (%d) iniciado para %s(%d) \n", novo.pid_veiculo, u->nome, u->pid_cliente);
                         
@@ -434,6 +438,7 @@ void* tTempo(void* arg){
                     
                 }
            }
+           pthread_mutex_unlock(&servicos_mutex);
         }
         
         sleep(1); // NAO TENHO A CERTEZA DISTO MAS ACHO QUE FAZ SENTIDO
@@ -454,11 +459,11 @@ void *tTFrota(void* arg){
 
                 /// caso para mensagem de progresso
                 int nbytes = read(frota[i].fd_leitura, buf, sizeof(buf));
-                sscanf(buf, "%s %d", msg, &distanciaAtual);
-
-
+                
                 if(nbytes > 0){
-                    msg[nbytes] = '\0';
+                    buf[nbytes] = '\0';
+
+                    sscanf(buf, "%s %d", msg, &distanciaAtual);
 
                     if(strcmp(msg,VIAGEM_CONCLUIDA)==0){
                         frota[i].estado = VEICULO_LIVRE;
@@ -467,13 +472,12 @@ void *tTFrota(void* arg){
                             s->estado = SERV_CONCLUIDO;
 
                             char resposta[MAX_STR];
-                            printf("[THREAD-FROTA] Veiculo (%d) concluiu a viagem do %s(%d)\n", frota[i].pid_veiculo, u->nome, u->pid_cliente);
+                            printf("[THREAD-FROTA] Veiculo (%d) concluiu a viagem do %s(%d)\n", frota[i].pid_veiculo, u->nome, u->pid_cliente);                
+                            
+                            waitpid(frota[i].pid_veiculo, NULL, 0); // evitar zombies
 
                             memset(&frota[i], 0 , sizeof(Veiculo));
                             nVeiculos--;
-
-                            memset(s, 0 , sizeof(Servico));
-                            nServicos--;
 
                         }
                     }else if(strcmp(msg,"PROGRESSO")==0){
@@ -484,7 +488,7 @@ void *tTFrota(void* arg){
                 }
             }
         }
-        sleep(1);
+        sleep(1); // nao e ideal mas nao sei outra solucao
     }
     return NULL;
 }
