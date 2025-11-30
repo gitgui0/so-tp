@@ -348,89 +348,72 @@ void* tTempo(void* arg){
         for(int i = 0; i < nServicos; i++){
             // <= ou == ?
             // meti <= so para estar seguro
+            
             if(servicos[i].estado == SERV_AGENDADO && servicos[i].hora_agendada <= tempo){  
                 // Iniciar servico
-                int idx = devolveVeiculoLivre();
-                // Nao ha nehum veiculo lvire, tentamos criar um, se der
-                // Falta PIPES para o veiculo e controlador se comunicarem
-                if(idx == -1){
-                    if(nVeiculos >= max_veiculos){
-                        printf("Nao ha veiculos livres e ja atingimos o maximo de veiculos (%d)\n", max_veiculos);
+                if(nVeiculos >= max_veiculos){
+                    printf("Nao ha veiculos livres e ja atingimos o maximo de veiculos (%d)\n", max_veiculos);
+                    continue;
+                } else {
+                    Veiculo novo;
+                    memset(&novo, 0, sizeof(Veiculo));
+                    novo.id_servico = servicos[i].id;
+                    novo.estado = VEICULO_OCUPADO;
+                    int fd_v[2];
+                    if(pipe(fd_v) == -1){
+                        perror("Erro ao criar pipe veiculo-controlador");
                         continue;
-                    } else {
-                        Veiculo novo;
-                        memset(&novo, 0, sizeof(Veiculo));
-
+                    }
+                    pid_t pid = fork();
+                    if(pid == -1){
+                        perror("Erro ao criar processo veiculo");
+                        continue;
+                    }
+                    // Processo Filho - Veiculo
+                    else if(pid== 0){
+                        
+                        // Argumentos
+                        // ./veiculo <id> <origem> <distancia> <fifo_cliente>
+                        close(fd_v[0]); // fecha leitura
+                        char str_id[MAX_STR];
+                        char str_distancia[MAX_STR];
+                        char str_fd[MAX_STR];
+                        char pipe[MAX_PIPE];
+                        sprintf(str_id, "%d", servicos[i].id);
+                        sprintf(str_distancia, "%d", servicos[i].distancia);
+                        sprintf(str_fd, "%d", fd_v[1]);
+                        User* u = devolveUserPorPID(servicos[i].pid_cliente);
+                        sprintf(pipe, "%s", u->fifo_privado);
+                        
+                        execl("./veiculo", "veiculo", str_id, servicos[i].origem, str_distancia, str_fd, pipe, NULL);
+                        
+                        perror("[ERRO CRITICO] execl falhou");
+                        exit(EXIT_FAILURE);
+                    }
+                    // Processo Pai - Controlador
+                    else{
+                        close(fd_v[1]); // fecha escrita
                         novo.id_servico = servicos[i].id;
                         novo.estado = VEICULO_OCUPADO;
-
-                        int fd_v[2];
-                        if(pipe(fd_v) == -1){
-                            perror("Erro ao criar pipe veiculo-controlador");
-                            continue;
-                        }
-
-
-                        pid_t pid = fork();
-
-                        if(pid == -1){
-                            perror("Erro ao criar processo veiculo");
-                            continue;
-                        }
-                        // Processo Filho - Veiculo
-                        else if(pid== 0){
-                            
-                            // Argumentos
-                            // ./veiculo <id> <origem> <distancia> <fifo_cliente>
-                            close(fd_v[0]); // fecha leitura
-
-                            char str_id[MAX_STR];
-                            char str_distancia[MAX_STR];
-                            char str_fd[MAX_STR];
-                            char pipe[MAX_PIPE];
-
-                            sprintf(str_id, "%d", servicos[i].id);
-                            sprintf(str_distancia, "%d", servicos[i].distancia);
-                            sprintf(str_fd, "%d", fd_v[1]);
-
-                            User* u = devolveUserPorPID(servicos[i].pid_cliente);
-                            sprintf(pipe, "%s", u->fifo_privado);
-                            
-                            execl("./veiculo", "veiculo", str_id, servicos[i].origem, str_distancia, str_fd, pipe, NULL);
-                            
-                            perror("[ERRO CRITICO] execl falhou");
-                            exit(EXIT_FAILURE);
-                        }
-                        // Processo Pai - Controlador
-                        else{
-                            close(fd_v[1]); // fecha escrita
-
-                            novo.id_servico = servicos[i].id;
-                            novo.estado = VEICULO_OCUPADO;
-                            novo.pid_veiculo = pid;
-                            novo.fd_leitura = fd_v[0];
-                            novo.distancia = servicos[i].distancia;
-                            novo.distancia_percorrida = 0;
-                            
-                            int flags = fcntl(fd_v[0], F_GETFL, 0);
-                            fcntl(fd_v[0], F_SETFL, flags | O_NONBLOCK);
-                            
-                            pthread_mutex_lock(&servicos_mutex);
-
-                            frota[nVeiculos] = novo;
-                            nVeiculos++;
-
-                            servicos[i].pid_veiculo = pid;
-                            servicos[i].estado = SERV_EM_CURSO;
-
-                            pthread_mutex_unlock(&servicos_mutex);
-
-                            User* u = devolveUserPorPID(servicos[i].pid_cliente);
-
-                            printf(" Veiculo (%d) iniciado para %s(%d) \n", novo.pid_veiculo, u->nome, u->pid_cliente);
-                            
-                        }
+                        novo.pid_veiculo = pid;
+                        novo.fd_leitura = fd_v[0];
+                        novo.distancia = servicos[i].distancia;
+                        novo.distancia_percorrida = 0;
+                        
+                        int flags = fcntl(fd_v[0], F_GETFL, 0);
+                        fcntl(fd_v[0], F_SETFL, flags | O_NONBLOCK);
+                        
+                        pthread_mutex_lock(&servicos_mutex);
+                        frota[nVeiculos] = novo;
+                        nVeiculos++;
+                        servicos[i].pid_veiculo = pid;
+                        servicos[i].estado = SERV_EM_CURSO;
+                        pthread_mutex_unlock(&servicos_mutex);
+                        User* u = devolveUserPorPID(servicos[i].pid_cliente);
+                        printf(" Veiculo (%d) iniciado para %s(%d) \n", novo.pid_veiculo, u->nome, u->pid_cliente);
+                        
                     }
+                    
                 }
            }
         }
@@ -465,12 +448,15 @@ void *tTFrota(void* arg){
                         if(s != NULL){
                             s->estado = SERV_CONCLUIDO;
 
-                            frota[i].id_servico = -1;
-                            frota[i].distancia = 0;
-                            frota[i].estado = VEICULO_LIVRE;
-
                             char resposta[MAX_STR];
                             printf("[THREAD-FROTA] Veiculo (%d) concluiu a viagem do %s(%d)\n", frota[i].pid_veiculo, u->nome, u->pid_cliente);
+
+                            memset(&frota[i], 0 , sizeof(Veiculo));
+                            nVeiculos--;
+
+                            memset(s, 0 , sizeof(Servico));
+                            nServicos--;
+
                         }
                     }else if(strcmp(msg,"PROGRESSO")==0){
                         frota[i].distancia_percorrida = distanciaAtual;  

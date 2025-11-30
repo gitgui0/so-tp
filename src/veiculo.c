@@ -14,8 +14,6 @@ int main(int argc, char* argv[]){
     char* pipe_cliente = argv[5];
 
     
-    
-    
     int fd_cli = open(pipe_cliente, O_WRONLY);
     if(fd_cli == -1){
         perror("Erro ao abrir pipe do cliente");
