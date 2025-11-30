@@ -28,7 +28,7 @@ int main(int argc, char* argv[]){
     write(fd_cli, msg_cli, strlen(msg_cli));
 
     while(distanciaPercorrida < distanciaTotal){
-        sprintf(msg_cli, "Veiculo %d a caminho. Distancia: %d km de %d km\n", id, distanciaPercorrida, distanciaTotal);
+        sprintf(msg_cli, "Veiculo %d a caminho. Distancia: %d km de %d km\n", getppid(), distanciaPercorrida, distanciaTotal);
         write(fd_cli, msg_cli, strlen(msg_cli));
         sprintf(msg_ctrl, "PROGRESSO %d %d", distanciaPercorrida, id);
         write(fd_ctrl, msg_ctrl, strlen(msg_ctrl));
@@ -36,7 +36,7 @@ int main(int argc, char* argv[]){
         distanciaPercorrida++;
     }
 
-    sprintf(msg_cli, "Veiculo %d chegou ao destino.\n", id);
+    sprintf(msg_cli, "Veiculo %d chegou ao destino.\n", getppid());
     write(fd_cli, msg_cli, strlen(msg_cli));
     sprintf(msg_ctrl, "%s", VIAGEM_CONCLUIDA);
     write(fd_ctrl, msg_ctrl, strlen(msg_ctrl));

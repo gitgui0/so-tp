@@ -55,6 +55,15 @@ Servico* devolveServicoPorID(int id){
     return NULL;
 }
 
+Servico* devolveServicoPorUserID(pid_t pidUser){
+    for(int i = 0; i < nServicos; i++){
+        if(servicos[i].pid_cliente == pidUser){
+            return &servicos[i];
+        }
+    }
+    return NULL;
+}
+
 Veiculo* devolveVeiculoPorPID(pid_t pid){
     for(int i = 0; i < nVeiculos; i++){
         if(frota[i].pid_veiculo == pid){
@@ -68,7 +77,16 @@ Veiculo* devolveVeiculoPorPID(pid_t pid){
 void listaUsers(){
     printf("\n--- LISTA DE UTILIZADORES ---\n");
     for(int i = 0; i < nUsers; i++){
-        printf("%d. %s (PID: %d)\n", i+1, users[i].nome, users[i].pid_cliente);
+        Servico *s = devolveServicoPorUserID(users[i].pid_cliente);
+        char estado[MAX_STR];
+
+        if(s==NULL) strcpy(estado, "Sem servico");
+        else {
+            if(s->estado == SERV_AGENDADO) strcpy(estado, "A espera de veiculo");
+            else if(s->estado == SERV_EM_CURSO) strcpy(estado, "Em viagem");
+        }
+
+        printf("%d. %s (PID: %d) - %s\n", i+1, users[i].nome, users[i].pid_cliente,estado);
     }
     printf("-----------------------------\n");
 }
