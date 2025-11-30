@@ -38,6 +38,8 @@
 // --- Estados do Veículo ---
 #define VEICULO_LIVRE 0
 #define VEICULO_OCUPADO 1
+#define VIAGEM_CONCLUIDA "VIAGEM_CONCLUIDA"
+
 
 
 // --- Structs ---
@@ -53,6 +55,7 @@ typedef struct Servico{
     int id;
     int hora_agendada;
     int distancia;
+    int distancia_percorrida;
     char origem[MAX_STR];
     int estado; // 0 - agendado, 1 - em curso, 2 - concluido
     pid_t pid_cliente;
@@ -61,7 +64,7 @@ typedef struct Servico{
 
 typedef struct Veiculo{
     int id_servico;
-    int estado;
+    int estado; // 0 - livre, 1 - ocupado
     pid_t pid_veiculo;
     int fd_leitura;
 } Veiculo;

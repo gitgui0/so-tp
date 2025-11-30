@@ -20,10 +20,12 @@ int nVeiculos = 0;
 pthread_t control_tid;
 pthread_t clientes_tid;
 pthread_t tempo_tid;
+pthread_t frota_tid;
 
 // Sincronização
 pthread_mutex_t users_mutex;
 pthread_mutex_t servicos_mutex;
+pthread_mutex_t frota_mutex;
 
 
 User* devolveUserPorNome(char* nome){
@@ -39,6 +41,24 @@ User* devolveUserPorPID(pid_t pid){
     for(int i = 0; i < nUsers; i++){
         if(users[i].pid_cliente == pid){
             return &users[i];
+        }
+    }
+    return NULL;
+}
+
+Servico* devolveServicoPorID(int id){
+    for(int i = 0; i < nServicos; i++){
+        if(servicos[i].id == id){
+            return &servicos[i];
+        }
+    }
+    return NULL;
+}
+
+Veiculo* devolveVeiculoPorPID(pid_t pid){
+    for(int i = 0; i < nVeiculos; i++){
+        if(frota[i].pid_veiculo == pid){
+            return &frota[i];
         }
     }
     return NULL;
@@ -157,7 +177,8 @@ void tratarComandoCliente(char* cmd, char* nome, char* args) {
         novo.id = nServicos + 1;
         novo.estado = SERV_AGENDADO;
         novo.pid_cliente = devolveUserPorNome(nome)->pid_cliente;
-        novo.pid_veiculo = -1; // por agora
+        novo.pid_veiculo = -1;
+        novo.distancia_percorrida = 0;
         servicos[nServicos] = novo;
         nServicos++;
 
@@ -245,7 +266,6 @@ void* tUsers(void* arg) {
 
     // Variáveis locais
     char buffer_msg[256];
-    char conf[5];
     char cmd[20], nome[MAX_STR], args[MAX_STR * 2];
 
     while (*loop_ptr) { 
@@ -280,8 +300,6 @@ void* tUsers(void* arg) {
 
 void* tControl(void* arg) {
     TControlInfo* info = (TControlInfo*)arg;
-    
-    free(arg); // Liberta a memória da struct alocada na main
 
     // Variáveis locais
     char buffer[MAX_STR];
@@ -314,6 +332,8 @@ void* tTempo(void* arg){
         // so para testar
         printf("\n%d", tempo);
         // Verificar para todos os servicos, se o tempo chegou a hora do servico
+       
+
         for(int i = 0; i < nServicos; i++){
             // <= ou == ?
             // meti <= so para estar seguro
@@ -333,6 +353,12 @@ void* tTempo(void* arg){
                         novo.id_servico = servicos[i].id;
                         novo.estado = VEICULO_OCUPADO;
 
+                        int fd_v[2];
+                        if(pipe(fd_v) == -1){
+                            perror("Erro ao criar pipe veiculo-controlador");
+                            continue;
+                        }
+
 
                         pid_t pid = fork();
 
@@ -345,39 +371,90 @@ void* tTempo(void* arg){
                             
                             // Argumentos
                             // ./veiculo <id> <origem> <distancia> <fifo_cliente>
+                            close(fd_v[0]); // fecha leitura
 
-                            char str_id[20];
-                            char str_distancia[20];
-                            char str_fd[100];
+                            char str_id[MAX_STR];
+                            char str_distancia[MAX_STR];
+                            char str_fd[MAX_STR];
+                            char pipe[MAX_PIPE];
 
                             sprintf(str_id, "%d", servicos[i].id);
                             sprintf(str_distancia, "%d", servicos[i].distancia);
+                            sprintf(str_fd, "%d", fd_v[1]);
 
-                            strcpy(str_fd, "-1"); 
+                            User* u = devolveUserPorPID(servicos[i].pid_cliente);
+                            sprintf(pipe, "%s", u->fifo_privado);
 
                             // E a chamada deve usar:
-                            execl("./veiculo", "veiculo", str_id, servicos[i].origem, str_distancia, str_fd, NULL);
+                            execl("./veiculo", "veiculo", str_id, servicos[i].origem, str_distancia, str_fd, pipe, NULL);
                             
                             perror("[ERRO CRITICO] execl falhou");
                             exit(EXIT_FAILURE);
                         }
                         // Processo Pai - Controlador
                         else{
+                            close(fd_v[1]); // fecha escrita
+
                             novo.pid_veiculo = pid;
-                            novo.fd_leitura = -1;
+                            novo.fd_leitura = fd_v[0];
+                            
+                            int flags = fcntl(fd_v[0], F_GETFL, 0);
+                            fcntl(fd_v[0], F_SETFL, flags | O_NONBLOCK);
+                            
+                            pthread_mutex_lock(&servicos_mutex);
 
                             frota[nVeiculos] = novo;
                             nVeiculos++;
 
                             servicos[i].pid_veiculo = pid;
                             servicos[i].estado = SERV_EM_CURSO;
+
+                            pthread_mutex_unlock(&servicos_mutex);
+                            
                         }
                     }
                 }
            }
         }
-        sleep(1); // NAO TENHO A CERTEZA DISOT MAS ACHO QUE FAZ SENTIDO
+        
+        sleep(1); // NAO TENHO A CERTEZA DISTO MAS ACHO QUE FAZ SENTIDO
     }
+    return NULL;
+}
+
+void *tTFrota(void* arg){
+    while(loop){
+        printf("\n[THREAD FROTA] A verificar veiculos ocupados...\n");
+        for(int i = 0; i < nVeiculos; i++){
+            if(frota[i].estado == VEICULO_OCUPADO){
+                char buf[MAX_STR];
+                char msg[MAX_STR];
+                int distanciaAtual, idServico;
+                
+                int nbytes = read(frota[i].fd_leitura, buf, sizeof(buf));
+                sscanf(buf, "%s %d %d", msg, &distanciaAtual, &idServico);
+
+                printf("\n[THREAD FROTA] msg: %s \t atual:%d \t servico: %d \n", msg, distanciaAtual, idServico);
+
+                if(nbytes > 0){
+                    msg[nbytes] = '\0';
+
+                    if(strcmp(msg,VIAGEM_CONCLUIDA)==0){
+                        frota[i].estado = VEICULO_LIVRE;
+                    }else if(strcmp(msg,"PROGRESSO")==0){
+                        Servico* associado = devolveServicoPorID(idServico);
+                        if(associado != NULL){
+                            associado->distancia_percorrida = distanciaAtual;
+                        }     
+                    } else{
+                        printf("\n[VEICULO %d]: %s\n", frota[i].pid_veiculo, msg);
+                    }
+                }
+            }
+        }
+        sleep(1);
+    }
+    return NULL;
 }
 
 // --- MAIN ---
@@ -428,6 +505,7 @@ int main(){
     alarm(1);
     pthread_mutex_init(&users_mutex, NULL);
     pthread_mutex_init(&servicos_mutex, NULL);
+    pthread_mutex_init(&frota_mutex, NULL);
 
     // 5. Lançar Thread Clientes
     TUserInfo *args_user = (TUserInfo*)malloc(sizeof(TUserInfo)); 
@@ -468,6 +546,11 @@ int main(){
         exit(1);
     }
 
+    if (pthread_create(&frota_tid, NULL, tTFrota, NULL) != 0) {
+        perror("Erro ao criar thread para controlo do controlador");
+        exit(1);
+    }
+
 
     
 
@@ -477,6 +560,9 @@ int main(){
     // Cancelar a thread de clientes (que está bloqueada a ler o named pipe)
     pthread_cancel(clientes_tid); 
     pthread_join(clientes_tid, NULL);
+
+    pthread_join(tempo_tid,NULL);
+    pthread_join(frota_tid,NULL);
 
     // Fechar a sessao dos clientes que ainda estavam ativos
     for(int i = 0; i < nUsers; i++){

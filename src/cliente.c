@@ -114,7 +114,7 @@ int main(int argc, char* argv[]){
         if(atividade < 0 && errno != EINTR) break;
         if(!loop) break;
 
-        // Mensagens do Controlador
+        // Mensagens do Controlador ou Veiculo
         if(FD_ISSET(fd, &read_fds)){
             int nbytes = read(fd, buffer_pipe, sizeof(buffer_pipe)-1);
             if(nbytes > 0){
