@@ -104,6 +104,7 @@ void cancelarServico(int idCancelar){
                 }
             }
 
+            printf("[CANCELAR] Servico ID %d cancelado.\n", servicos[i].id);
             // remover o servico
             for(int j = i; j < nServicos - 1; j++){
                 servicos[j] = servicos[j+1];
@@ -267,7 +268,7 @@ void tratarComandoCliente(char* cmd, char* nome, char* args) {
         if(fd_c != -1){
             int encontrados=0;
             for(int i = 0; i < nServicos; i++){
-                if(servicos[i].pid_cliente = u->pid_cliente){
+                if(servicos[i].pid_cliente == u->pid_cliente){
                     sprintf(resposta, "Servico ID: %d - Hora: %d - Distancia: %d km - Origem: %s - Estado: ",
                         servicos[i].id, servicos[i].hora_agendada, servicos[i].distancia, servicos[i].origem);
                     if(servicos[i].estado == SERV_AGENDADO)
@@ -291,8 +292,41 @@ void tratarComandoCliente(char* cmd, char* nome, char* args) {
 
         
         
-    }
-    else {
+    }else if(strcmp(cmd, "cancelar")==0){
+        printf("\nnome: %s\n",nome);
+        User* u = devolveUserPorNome(nome);
+
+        printf("\nUser nome: %s\n",u->nome);
+        int id = -1, eliminados = 0;
+        char resposta[MAX_STR];
+
+        sscanf(args,"%d",&id);
+
+        int fd_c = open(u->fifo_privado, O_WRONLY);
+        if(fd_c == -1){
+            printf("\nErro ao abrir pipe do cliente para cancelar com o nome %s\n", nome);
+        }else{
+
+            int i = 0;
+            while(i < nServicos){
+                //verifica se o servico pertence ao user
+                if(servicos[i].pid_cliente == u->pid_cliente){
+                    //verifica o id do servico
+                    if(servicos[i].id == id || id == 0){
+                        //cancelar servico
+                        cancelarServico(servicos[i].id);
+                        eliminados++;
+                    }
+                }else{
+                    i++;
+                }
+            }
+
+            sprintf(resposta, "%d servico(s) cancelado(s).\n", eliminados);
+            write(fd_c, resposta, strlen(resposta));
+            close(fd_c);
+        }
+    }else {
         printf("\n[AVISO] Comando desconhecido: %s", cmd);
 
     }
