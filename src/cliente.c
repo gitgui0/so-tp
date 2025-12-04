@@ -1,7 +1,8 @@
 #include "comum.h"
 
 int loop=1;
-
+int em_viagem = 0; // 0 = Livre, 1 = Em viagem
+int pedido_terminar = 0;
 
 
 void handleSinal(int sinal, siginfo_t *info, void *context){
@@ -120,6 +121,19 @@ int main(int argc, char* argv[]){
             if(nbytes > 0){
                 buffer_pipe[nbytes] = '\0';
                 printf("\n[RECEBIDO]: %s\n> ", buffer_pipe);
+
+                if(strstr(buffer_pipe, "iniciado para servico") != NULL){
+                    em_viagem = 1;
+                }
+                else if(strstr(buffer_pipe, "chegou ao destino") != NULL || strstr(buffer_pipe, "cancelado") != NULL){
+                    em_viagem = 0;
+                        
+                    // Se o user ja tinha pedido para sair, agora pode sair
+                    if(pedido_terminar == 1){
+                        printf("\nViagem concluida. A terminar cliente...\n");
+                        loop = 0;
+                    }
+                }
             }
         }
 
@@ -129,14 +143,20 @@ int main(int argc, char* argv[]){
                 buffer_teclado[strcspn(buffer_teclado, "\n")] = 0; // Remove \n
 
                 if(strcmp(buffer_teclado, "terminar") == 0){
-                    loop = 0;
+                    if(em_viagem){
+                        printf("[AVISO] Nao pode sair durante uma viagem!\n");
+                        printf("O cliente terminara automaticamente quando a viagem acabar.\n");
+                        pedido_terminar = 1;
+                    } else {
+                        loop = 0; // Sai imediatamente se estiver livre
+                    }
                 }
                 else if(strlen(buffer_teclado) > 0){
                     char cmd[MAX_STR], args[MAX_STR];
                     args[0] = '\0';
                     int res = sscanf(buffer_teclado, "%s %[^\n]", cmd, args);
 
-                    if(res >= 1){
+                    if(res >= 1 && strcmp(cmd,"LOGIN") !=0 && strcmp(cmd,"LOGOUT") !=0){
                         if(res == 1) sprintf(msg_envio, "%s %s", cmd, user.nome);
                         else sprintf(msg_envio, "%s %s %s", cmd, user.nome, args);
                         

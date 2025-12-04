@@ -252,6 +252,13 @@ void tratarComandoCliente(char* cmd, char* nome, char* args) {
                     users[j] = users[j + 1];
                 }
                 nUsers--;
+
+                for(int k = 0; k < nServicos; k++){
+                    if(servicos[k].pid_cliente == users[i].pid_cliente){
+                        cancelarServico(servicos[k].id);
+                        k--; 
+                    }
+                }
                 break;
             }
         }
