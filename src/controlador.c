@@ -262,7 +262,14 @@ void processar_comando_admin(char* buffer) {
         listaFrotaAtiva();
     }
     else if (strcmp(comando, "km") == 0) {
-        printf("Comando km - A implementar\n");
+        int count = 0;
+        for(int i = 0; i < nVeiculos; i++){
+            if(frota[i].estado == VEICULO_OCUPADO){
+                count += frota[i].distancia_percorrida;
+            }
+        }
+        printf("Distancia total percorrida por todos os veiculos: %d km\n", count);
+        
     }
     else if (strcmp(comando, "hora") == 0) {
         printf("Tempo simulado: %d\n", tempo);
