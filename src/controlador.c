@@ -72,7 +72,56 @@ Veiculo* devolveVeiculoPorPID(pid_t pid){
     }
     return NULL;
 }
+void cancelarServico(int idCancelar){
+    pthread_mutex_lock(&servicos_mutex);
+    pthread_mutex_lock(&frota_mutex);
 
+    int i = 0;
+    while(i < nServicos){ 
+        if(servicos[i].id == idCancelar || idCancelar == 0){
+            
+            // tratar do veiculo em servicos em curso
+            if(servicos[i].estado == SERV_EM_CURSO){
+                int idx_veiculo = -1;
+                for(int v=0; v<nVeiculos; v++){
+                    if(frota[v].pid_veiculo == servicos[i].pid_veiculo){
+                        idx_veiculo = v;
+                        break;
+                    }
+                }
+
+                // encontrou o veiculo
+                if(idx_veiculo != -1){
+                    pid_t pid = frota[idx_veiculo].pid_veiculo;
+                    
+                    kill(pid, SIGUSR1);
+                    waitpid(pid, NULL, 0); 
+                    close(frota[idx_veiculo].fd_leitura);
+
+                    // remove da frota
+                    frota[idx_veiculo] = frota[nVeiculos - 1];
+                    nVeiculos--;
+                }
+            }
+
+            // remover o servico
+            for(int j = i; j < nServicos - 1; j++){
+                servicos[j] = servicos[j+1];
+            }
+            nServicos--;
+        } else {
+            // so se avanca se nao removemos nada
+            i++;
+        }
+
+        // Se era um servico especifico, podemos sair logo
+        if(idCancelar != 0) 
+            break; 
+    }
+
+    pthread_mutex_unlock(&frota_mutex);
+    pthread_mutex_unlock(&servicos_mutex);
+}
 
 void listaUsers(){
     printf("\n--- LISTA DE UTILIZADORES ---\n");
@@ -263,19 +312,17 @@ void processar_comando_admin(char* buffer) {
     }
     else if (strcmp(comando, "km") == 0) {
         int count = 0;
-        for(int i = 0; i < nVeiculos; i++){
-            if(frota[i].estado == VEICULO_OCUPADO){
+        for(int i = 0; i < nVeiculos; i++)
+            if(frota[i].estado == VEICULO_OCUPADO)
                 count += frota[i].distancia_percorrida;
-            }
-        }
         printf("Distancia total percorrida por todos os veiculos: %d km\n", count);
-        
+
     }
     else if (strcmp(comando, "hora") == 0) {
         printf("Tempo simulado: %d\n", tempo);
     }
     else if (strcmp(comando, "cancelar") == 0 && args == 2) {
-        printf("A cancelar servico ID %d (A implementar logicamente)\n", id_cancelar);
+        cancelarServico(id_cancelar);
     }
     else if (strcmp(comando, "terminar") == 0) {
         loop = 0;
@@ -376,7 +423,10 @@ void* tTempo(void* arg){
             
             pthread_mutex_lock(&servicos_mutex);
             if(servicos[i].estado == SERV_CONCLUIDO){
-                memset(&servicos[i], 0 , sizeof(Servico));
+                //shift
+                for(int j = i + 1; j < nServicos ; j++){
+                    servicos[j - 1] = servicos[j];
+                }
                 nServicos--;
             }else if(servicos[i].estado == SERV_AGENDADO && servicos[i].hora_agendada <= tempo){  
                 // Iniciar servico
@@ -483,9 +533,12 @@ void *tTFrota(void* arg){
                             
                             waitpid(frota[i].pid_veiculo, NULL, 0); // evitar zombies
 
-                            memset(&frota[i], 0 , sizeof(Veiculo));
+                            //shift
+                            for(int j = i; j < nVeiculos - 1; j++){
+                                frota[j] = frota[j + 1];
+                            }
                             nVeiculos--;
-
+                            
                         }
                     }else if(strcmp(msg,"PROGRESSO")==0){
                         frota[i].distancia_percorrida = distanciaAtual;  

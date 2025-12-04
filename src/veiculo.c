@@ -1,5 +1,13 @@
 #include "comum.h"
 
+int cancelar=0;
+
+void handleSinal(int sinal, siginfo_t *info, void *context){
+    if(sinal == SIGUSR1){
+        cancelar=1;
+    }
+}
+
 int main(int argc, char* argv[]){
     
     if(argc != 6){
@@ -15,6 +23,12 @@ int main(int argc, char* argv[]){
 
     pid_t pid = getpid();
 
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(struct sigaction));
+
+    sa.sa_sigaction = handleSinal;
+    sigaction(SIGUSR1, &sa, NULL);
+
     
     int fd_cli = open(pipe_cliente, O_WRONLY);
     if(fd_cli == -1){
@@ -29,20 +43,27 @@ int main(int argc, char* argv[]){
     sprintf(msg_cli, "Veiculo %d iniciado para servico %d. Origem %s.\n", pid,id,origem); 
     write(fd_cli, msg_cli, strlen(msg_cli));
 
-    while(distanciaPercorrida < distanciaTotal){
+    while(distanciaPercorrida < distanciaTotal && !cancelar){
         sprintf(msg_cli, "Distancia: %d km de %d km\n", distanciaPercorrida, distanciaTotal);
         write(fd_cli, msg_cli, strlen(msg_cli));
         sprintf(msg_ctrl, "PROGRESSO %d %d", distanciaPercorrida, distanciaTotal);
         write(fd_ctrl, msg_ctrl, strlen(msg_ctrl));
         sleep(1);
-        distanciaPercorrida++;
+        if(!cancelar){
+            distanciaPercorrida++;
+        }
     }
 
-    sprintf(msg_cli, "Veiculo %d chegou ao destino.\n", getppid());
-    write(fd_cli, msg_cli, strlen(msg_cli));
-    sprintf(msg_ctrl, "%s", VIAGEM_CONCLUIDA);
-    write(fd_ctrl, msg_ctrl, strlen(msg_ctrl));
-
+    if(cancelar){
+        sprintf(msg_cli, "O servico foi cancelado.\n");
+        write(fd_cli, msg_cli, strlen(msg_cli));
+    }else{
+        sprintf(msg_cli, "Veiculo %d chegou ao destino.\n", getppid());
+        write(fd_cli, msg_cli, strlen(msg_cli));
+        sprintf(msg_ctrl, "%s", VIAGEM_CONCLUIDA);
+        write(fd_ctrl, msg_ctrl, strlen(msg_ctrl));
+    }
+        
 
     return 0;
 }
