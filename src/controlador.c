@@ -114,9 +114,7 @@ void cancelarServico(int idCancelar){
             i++;
         }
 
-        // Se era um servico especifico, podemos sair logo
-        if(idCancelar != 0) 
-            break; 
+        
     }
 
     pthread_mutex_unlock(&frota_mutex);
