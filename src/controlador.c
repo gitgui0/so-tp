@@ -557,6 +557,11 @@ void *tTFrota(void* arg){
 int main(){
     setbuf(stdout,NULL);
 
+    if(access(PIPE_CONTROLADOR,F_OK) == 0){
+        printf("Ja existe um controlador a correr.\n");
+        return 0;
+    }
+
     char* s_nveiculos = getenv("NVEICULOS");
     if(s_nveiculos == NULL) 
         max_veiculos = MAX_VEICULOS; 
