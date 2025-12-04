@@ -149,6 +149,9 @@ int main(int argc, char* argv[]){
         }
     }
 
+    sprintf(msg_envio, "LOGOUT %s", user.nome);
+    write(fd_ctrl, msg_envio, strlen(msg_envio));
+
     close(fd);
     unlink(user.fifo_privado);
 

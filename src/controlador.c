@@ -243,6 +243,18 @@ void tratarComandoCliente(char* cmd, char* nome, char* args) {
         }
         printf("\n[LOGIN] User: %s", nome);
 
+    }else if(strcmp(cmd,"LOGOUT") == 0){
+        for(int i = 0; i < nUsers; i++){
+            if(strcmp(users[i].nome, nome) == 0){
+                printf("\n[LOGOUT] User: %s", nome);
+                // Remover user
+                for(int j = i; j < nUsers - 1; j++){
+                    users[j] = users[j + 1];
+                }
+                nUsers--;
+                break;
+            }
+        }
     }
     else if(strcmp(cmd,"agendar") == 0){
         Servico novo;
