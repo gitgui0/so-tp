@@ -260,6 +260,39 @@ void tratarComandoCliente(char* cmd, char* nome, char* args) {
         servicos[nServicos] = novo;
         nServicos++;
 
+    }else if(strcmp(cmd,"consultar") == 0){
+        char resposta[MAX_STR];
+
+        User* u = devolveUserPorNome(nome);
+
+        int fd_c = open(u->fifo_privado, O_WRONLY);
+        if(fd_c != -1){
+            int encontrados=0;
+            for(int i = 0; i < nServicos; i++){
+                if(servicos[i].pid_cliente = u->pid_cliente){
+                    sprintf(resposta, "Servico ID: %d - Hora: %d - Distancia: %d km - Origem: %s - Estado: ",
+                        servicos[i].id, servicos[i].hora_agendada, servicos[i].distancia, servicos[i].origem);
+                    if(servicos[i].estado == SERV_AGENDADO)
+                        strcat(resposta, "Agendado\n");
+                    else if(servicos[i].estado == SERV_EM_CURSO)
+                        strcat(resposta, "Em curso\n");
+                    else if(servicos[i].estado == SERV_CONCLUIDO)
+                        strcat(resposta, "Concluido\n");
+
+                    write(fd_c, resposta, strlen(resposta));
+                    encontrados++;
+                }
+            }
+            if(encontrados==0){
+                sprintf(resposta, "Nao foram encontrados servicos.\n");
+                write(fd_c, resposta, strlen(resposta));
+            }
+        }else{
+            printf("\nErro ao abrir pipe do cliente para consultar com o nome %s\n", nome);
+        }
+
+        
+        
     }
     else {
         printf("\n[AVISO] Comando desconhecido: %s", cmd);
@@ -355,7 +388,7 @@ void* tUsers(void* arg) {
         int nbytes = read(fd_leitura_fifo, buffer_msg, sizeof(buffer_msg) - 1);
         
         if (nbytes > 0) {
-            buffer_msg[nbytes] = '\0'; 
+            buffer_msg[nbytes] = '\0';
             
             
             int res_scan = sscanf(buffer_msg, "%s %s %[^\n]", cmd, nome, args);
@@ -369,6 +402,7 @@ void* tUsers(void* arg) {
             // PROTEÇÃO (LOCK)
             pthread_mutex_lock(mutex);
             tratarComandoCliente(cmd, nome, args);
+            args[0] = '\0';
             // LIBERTAR (UNLOCK)
             pthread_mutex_unlock(mutex);    
             } 
