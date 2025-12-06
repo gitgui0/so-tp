@@ -78,6 +78,13 @@ typedef struct {
     int id_servico_atual;
     int max_veiculos;
 
+
+    // Threads ids
+    pthread_t control_tid;
+    pthread_t clientes_tid;
+    pthread_t tempo_tid;
+    pthread_t frota_tid;
+
     // Dados
     User users[MAX_USERS];
     int nUsers;

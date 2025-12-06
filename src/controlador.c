@@ -366,6 +366,7 @@ void handleSinal(int sinal, siginfo_t *info, void *context){
     if(sinal == SIGINT){
         printf("\n[DEBUG] Recebi SIGINT. A parar loop...\n");
         ptr_sistema->loop = 0; 
+        pthread_cancel(ptr_sistema->control_tid);
     }
     if(sinal == SIGALRM){
         ptr_sistema->tempo++;
@@ -695,11 +696,6 @@ void *tTFrota(void* arg){
 int main(){
     setbuf(stdout,NULL);
 
-    pthread_t control_tid;
-    pthread_t clientes_tid;
-    pthread_t tempo_tid;
-    pthread_t frota_tid;
-
     SistemaControlador *sys = malloc(sizeof(SistemaControlador));
     if (!sys) { perror("Erro malloc"); return 1; }
 
@@ -770,35 +766,35 @@ int main(){
     pthread_mutex_init(&sys->servicos_mutex, NULL);
     pthread_mutex_init(&sys->frota_mutex, NULL);
 
-    if (pthread_create(&clientes_tid, NULL, tUsers, (void*)sys) != 0) {
+    if (pthread_create(&sys->clientes_tid, NULL, tUsers, (void*)sys) != 0) {
         perror("Erro ao criar thread para clientes.");
         exit(1);
     }
     
-    if (pthread_create(&control_tid, NULL, tControl, (void*)sys) != 0) {
+    if (pthread_create(&sys->control_tid, NULL, tControl, (void*)sys) != 0) {
         perror("Erro ao criar thread para controlo do controlador");
         exit(1);
     }
 
-    if (pthread_create(&tempo_tid, NULL, tTempo, (void*)sys) != 0) {
+    if (pthread_create(&sys->tempo_tid, NULL, tTempo, (void*)sys) != 0) {
         perror("Erro ao criar thread para controlo do controlador");
         exit(1);
     }
 
-    if (pthread_create(&frota_tid, NULL, tTFrota, (void*)sys) != 0) {
+    if (pthread_create(&sys->frota_tid, NULL, tTFrota, (void*)sys) != 0) {
         perror("Erro ao criar thread para controlo do controlador");
         exit(1);
     }
 
     // pthread_cancel so para o ctrl c
-    pthread_join(control_tid, NULL);
+    pthread_join(sys->control_tid, NULL);
 
     // Cancelar a thread de clientes (que está bloqueada a ler o named pipe)
-    pthread_cancel(clientes_tid); 
-    pthread_join(clientes_tid, NULL);
+    pthread_cancel(sys->clientes_tid); 
+    pthread_join(sys->clientes_tid, NULL);
 
-    pthread_join(tempo_tid,NULL);
-    pthread_join(frota_tid,NULL);
+    pthread_join(sys->tempo_tid,NULL);
+    pthread_join(sys->frota_tid,NULL);
 
     // Fechar a sessao dos clientes que ainda estavam ativos
     for(int i = 0; i < sys->nUsers; i++){
