@@ -70,21 +70,41 @@ typedef struct Veiculo{
     int distancia_percorrida;
 } Veiculo;
 
-typedef struct TUserInfo {
-    int fd_pipe;                            // FD de leitura do PIPE_CONTROLADOR
-    volatile int *loop_ptr;                 // Ponteiro para a variável global 'loop'
-    pthread_mutex_t *users_mutex_ptr;       // Ponteiro para o Mutex que protege users/nUsers
-} TUserInfo;
 
-typedef struct TControlInfo {
-    volatile int *loop_ptr; 
-    pthread_mutex_t *servicos_mutex_ptr;
-    /// mais coisas provavelmente
-} TControlInfo;
+typedef struct {
+    // Variáveis de Controlo
+    volatile int loop;
+    volatile int tempo;
+    int id_servico_atual;
+    int max_veiculos;
 
+    // Dados
+    User users[MAX_USERS];
+    int nUsers;
+    
+    Servico servicos[MAX_SERVICOS];
+    int nServicos;
+    
+    Veiculo frota[MAX_VEICULOS];
+    int nVeiculos;
 
+    // Mutexes
+    pthread_mutex_t users_mutex;
+    pthread_mutex_t servicos_mutex;
+    pthread_mutex_t frota_mutex;
+    
+    // Pipe
+    int fd_pipe_controlador;
+
+} SistemaControlador;
+
+typedef struct {
+    int loop;
+    int em_viagem;
+    int pedido_terminar;
+} ClienteEstado;
 
 // --- Funções ----
-void listaUsers();
-int existeEAdicionaUser(char* nome, char* fifo, pid_t pid);
+void listaUsers(SistemaControlador *sys);
+int existeEAdicionaUser(char* nome, char* fifo, pid_t pid,SistemaControlador *sys);
 

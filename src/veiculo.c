@@ -1,14 +1,19 @@
 #include "comum.h"
 
-int cancelar=0;
+volatile int *ptr_cancelar = NULL;
 
 void handleSinal(int sinal, siginfo_t *info, void *context){
+    (void)info; (void)context;
     if(sinal == SIGUSR1){
-        cancelar=1;
+        *ptr_cancelar=1;
     }
 }
 
 int main(int argc, char* argv[]){
+
+    volatile int cancelar = 0;
+    
+    ptr_cancelar = &cancelar;
     
     if(argc != 5){
         printf("Numero de parametros errado.\nUso: ./veiculo <id> <origem> <distanciaTotal> <pipe_controlador> <pipe_cliente>");
@@ -42,12 +47,18 @@ int main(int argc, char* argv[]){
     sprintf(msg_cli, "Veiculo %d iniciado para servico %d. Origem %s.\n", pid,id,origem); 
     write(fd_cli, msg_cli, strlen(msg_cli));
 
+    int passo_notificacao = (distanciaTotal + 10/2) / 10;
+    if (passo_notificacao < 1) passo_notificacao = 1;
+
     while(distanciaPercorrida < distanciaTotal && !cancelar){
-        sprintf(msg_cli, "Distancia: %d km de %d km\n", distanciaPercorrida, distanciaTotal);
-        write(fd_cli, msg_cli, strlen(msg_cli));
-        sprintf(msg_ctrl, "PROGRESSO %d %d", distanciaPercorrida, distanciaTotal);
-        write(STDOUT_FILENO, msg_ctrl, strlen(msg_ctrl));
-        sleep(1);
+        if (distanciaPercorrida % passo_notificacao == 0 || distanciaPercorrida == 0) {
+            sprintf(msg_cli, "Distancia: %d km de %d km\n", distanciaPercorrida, distanciaTotal);
+            write(fd_cli, msg_cli, strlen(msg_cli));
+            sprintf(msg_ctrl, "PROGRESSO %d %d", distanciaPercorrida, distanciaTotal);
+            write(STDOUT_FILENO, msg_ctrl, strlen(msg_ctrl));
+        }
+        sleep(1); 
+        
         if(!cancelar){
             distanciaPercorrida++;
         }

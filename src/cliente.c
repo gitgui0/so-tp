@@ -1,20 +1,26 @@
 #include "comum.h"
 
-int loop=1;
-int em_viagem = 0; // 0 = Livre, 1 = Em viagem
-int pedido_terminar = 0;
 
+ClienteEstado *ptr_estado = NULL;
 
 void handleSinal(int sinal, siginfo_t *info, void *context){
-    if(sinal == SIGINT){
+    (void)info; (void)context; // Silenciar warnings de variaveis nao usadas
+    if(sinal == SIGINT){ 
         printf("\nSIGINT\n");
-        loop = 0;
+        ptr_estado->loop = 0;
     }
 }
 
 int main(int argc, char* argv[]){
     
     setbuf(stdout,NULL);
+
+    ClienteEstado estado;
+    estado.loop = 1;
+    estado.em_viagem = 0;
+    estado.pedido_terminar = 0;
+
+    ptr_estado = &estado;
 
     User user;
     char buffer_teclado[MAX_STR];
@@ -105,7 +111,7 @@ int main(int argc, char* argv[]){
 
     printf("> ");
 
-    while(loop){
+    while(estado.loop){
         FD_ZERO(&read_fds);
         FD_SET(STDIN_FILENO, &read_fds); // le do teclado (cliente)
         FD_SET(fd, &read_fds); // le do pipe privado (controlador)
@@ -114,7 +120,7 @@ int main(int argc, char* argv[]){
         int atividade = select(max_fd + 1, &read_fds, NULL, NULL, NULL);
 
         if(atividade < 0 && errno != EINTR) break;
-        if(!loop) break;
+        if(!estado.loop) break;
 
         // Mensagens do Controlador ou Veiculo
         if(FD_ISSET(fd, &read_fds)){
@@ -124,15 +130,15 @@ int main(int argc, char* argv[]){
                 printf("\n[RECEBIDO]: %s\n> ", buffer_pipe);
 
                 if(strstr(buffer_pipe, "iniciado para servico") != NULL){
-                    em_viagem = 1;
+                    estado.em_viagem = 1;
                 }
                 else if(strstr(buffer_pipe, "chegou ao destino") != NULL || strstr(buffer_pipe, "cancelado") != NULL){
-                    em_viagem = 0;
+                    estado.em_viagem = 0;
                         
                     // Se o user ja tinha pedido para sair, agora pode sair
-                    if(pedido_terminar == 1){
+                    if(estado.pedido_terminar == 1){
                         printf("\nViagem concluida. A terminar cliente...\n");
-                        loop = 0;
+                        estado.loop = 0;
                     }
                 }
             }
@@ -144,12 +150,12 @@ int main(int argc, char* argv[]){
                 buffer_teclado[strcspn(buffer_teclado, "\n")] = 0; // Remove \n
 
                 if(strcmp(buffer_teclado, "terminar") == 0){
-                    if(em_viagem){
+                    if(estado.em_viagem){
                         printf("[AVISO] Nao pode sair durante uma viagem!\n");
                         printf("O cliente terminara automaticamente quando a viagem acabar.\n");
-                        pedido_terminar = 1;
+                        estado.pedido_terminar = 1;
                     } else {
-                        loop = 0; // Sai imediatamente se estiver livre
+                        estado.loop = 0; // Sai imediatamente se estiver livre
                     }
                 }
                 else if(strlen(buffer_teclado) > 0){
