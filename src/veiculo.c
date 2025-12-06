@@ -10,7 +10,7 @@ void handleSinal(int sinal, siginfo_t *info, void *context){
 
 int main(int argc, char* argv[]){
     
-    if(argc != 6){
+    if(argc != 5){
         printf("Numero de parametros errado.\nUso: ./veiculo <id> <origem> <distanciaTotal> <pipe_controlador> <pipe_cliente>");
         return 1;
     }
@@ -18,8 +18,7 @@ int main(int argc, char* argv[]){
     int id = atoi(argv[1]);
     char* origem = argv[2];
     int distanciaTotal = atoi(argv[3]);
-    int fd_ctrl = atoi(argv[4]);
-    char* pipe_cliente = argv[5];
+    char* pipe_cliente = argv[4];
 
     pid_t pid = getpid();
 
@@ -47,7 +46,7 @@ int main(int argc, char* argv[]){
         sprintf(msg_cli, "Distancia: %d km de %d km\n", distanciaPercorrida, distanciaTotal);
         write(fd_cli, msg_cli, strlen(msg_cli));
         sprintf(msg_ctrl, "PROGRESSO %d %d", distanciaPercorrida, distanciaTotal);
-        write(fd_ctrl, msg_ctrl, strlen(msg_ctrl));
+        write(STDOUT_FILENO, msg_ctrl, strlen(msg_ctrl));
         sleep(1);
         if(!cancelar){
             distanciaPercorrida++;
@@ -61,9 +60,9 @@ int main(int argc, char* argv[]){
         sprintf(msg_cli, "Veiculo %d chegou ao destino.\n", getppid());
         write(fd_cli, msg_cli, strlen(msg_cli));
         sprintf(msg_ctrl, "%s", VIAGEM_CONCLUIDA);
-        write(fd_ctrl, msg_ctrl, strlen(msg_ctrl));
+        write(STDOUT_FILENO, msg_ctrl, strlen(msg_ctrl));
     }
         
-
+    close(fd_cli);
     return 0;
 }

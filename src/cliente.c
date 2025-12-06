@@ -48,6 +48,7 @@ int main(int argc, char* argv[]){
 
 
     //CRIACAO DO PIPE PRIVADO DO CLIENTE
+  
 
     if(mkfifo(user.fifo_privado,0666) == -1){ // 0666 por agora
         perror("Erro na criacao do pipe cliente");
@@ -168,9 +169,6 @@ int main(int argc, char* argv[]){
             }
         }
     }
-
-    sprintf(msg_envio, "LOGOUT %s", user.nome);
-    write(fd_ctrl, msg_envio, strlen(msg_envio));
 
     close(fd);
     unlink(user.fifo_privado);
