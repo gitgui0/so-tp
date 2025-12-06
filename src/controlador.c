@@ -22,7 +22,7 @@ User* devolveUserPorPID(SistemaControlador *sys,pid_t pid){
 }
 
 Servico* devolveServicoPorIDS(SistemaControlador *sys,int id){
-    for(int i = 0; i < sys->nUsers; i++){
+    for(int i = 0; i < sys->nServicos; i++){
         if(sys->servicos[i].id == id){
             return &sys->servicos[i];
         }
@@ -31,7 +31,7 @@ Servico* devolveServicoPorIDS(SistemaControlador *sys,int id){
 }
 
 Servico* devolveServicoPorUserID(SistemaControlador *sys,pid_t pidUser){
-    for(int i = 0; i < sys->nUsers; i++){
+    for(int i = 0; i < sys->nServicos; i++){
         if(sys->servicos[i].pid_cliente == pidUser){
             return &sys->servicos[i];
         }
@@ -272,19 +272,25 @@ void tratarComandoCliente(char* cmd, char* nome, char* args,SistemaControlador *
             return;
         }
 
+        pthread_mutex_lock(&sys->servicos_mutex);
+
         novo.id = sys->id_servico_atual++;
         novo.estado = SERV_AGENDADO;
         novo.pid_cliente = devolveUserPorNome(sys,nome)->pid_cliente;
         novo.pid_veiculo = -1;
         sys->servicos[sys->nServicos] = novo;
         sys->nServicos++;
+
+        pthread_mutex_unlock(&sys->servicos_mutex);
+
         sprintf(resposta, "Servico agendado com sucesso.\n");
         write(fd_c, resposta, strlen(resposta));
+
 
         
 
     }else if(strcmp(cmd,"consultar") == 0){
-        char resposta[MAX_STR];
+        char resposta[MAX_LONG_STR];
 
         User* u = devolveUserPorNome(sys,nome);
 
@@ -446,7 +452,7 @@ void* tUsers(void* arg) {
             printf("\n[THREAD-USER] MENSAGEM RECEBIDA: %s\n", buffer_msg);
 
             if(res_scan < 2) {
-                printf("\nMsg invalida: %s\nAdmin> ", buffer_msg);
+                printf("\nMensagem invalida: %s\nAdmin> ", buffer_msg);
                 continue;
             }
 
@@ -507,7 +513,7 @@ void* tTempo(void* arg){
             // meti <= so para estar seguro
             
             pthread_mutex_lock(&sys->servicos_mutex);
-                fflush(stdout);
+            fflush(stdout);
             if(sys->servicos[i].estado == SERV_CONCLUIDO){
                 //shift
                 for(int j = i + 1; j < sys->nServicos ; j++){
@@ -522,8 +528,22 @@ void* tTempo(void* arg){
             if(sys->servicos[i].estado == SERV_AGENDADO && sys->servicos[i].hora_agendada <= sys->tempo){  
                 // Iniciar servico
                 if(sys->nVeiculos >= sys->max_veiculos){
-                    printf("Nao ha veiculos livres e ja atingimos o maximo de veiculos (%d)\n", sys->max_veiculos);
-                    pthread_mutex_unlock(&sys->servicos_mutex); 
+                    // printf("Nao ha veiculos livres e ja atingimos o maximo de veiculos (%d)\n", sys->max_veiculos);
+                    pthread_mutex_unlock(&sys->servicos_mutex);
+                    User* u = devolveUserPorPID(sys,sys->servicos[i].pid_cliente);
+                    if(u == NULL)
+                        continue;
+                    
+                    int fd_c = open(u->fifo_privado, O_WRONLY);
+                    if(fd_c == -1)
+                        continue;
+                    
+                    char resposta[MAX_STR];
+
+                    sprintf(resposta,"%s","Nao existem veiculos disponiveis. Esta na lista de espera.");
+                    write(fd_c, resposta, strlen(resposta));
+                    close(fd_c);
+
                     continue;
                 } 
                 
@@ -616,9 +636,15 @@ void* tTempo(void* arg){
                     
                     sys->servicos[i].pid_veiculo = pid;
                     sys->servicos[i].estado = SERV_EM_CURSO;
+                    pthread_mutex_lock(&sys->users_mutex);
                     
                     User* u = devolveUserPorPID(sys,sys->servicos[i].pid_cliente);
+                    if(u == NULL){
+                        perror("[ERRO CRITICO] User do servico nao encontrado");
+                        exit(EXIT_FAILURE);
+                    }
                     printf(" Veiculo (%d) iniciado para %s(%d) \n", novo.pid_veiculo, u->nome, u->pid_cliente);
+                    pthread_mutex_unlock(&sys->users_mutex);
                     
                 }
              }
@@ -679,7 +705,9 @@ void *tTFrota(void* arg){
                         // Voltar a bloquear para continuar o loop da frota
                         pthread_mutex_lock(&sys->frota_mutex);
                     }else if(strcmp(msg,"PROGRESSO")==0){
-                        sys->frota[i].distancia_percorrida = distanciaAtual;  
+                        sys->frota[i].distancia_percorrida = distanciaAtual;
+                        printf("[THREAD-FROTA] PROGRESSO - VEICULO %d para %s(%d) - %.2f\n",sys->frota[i].pid_veiculo, u->nome, u->pid_cliente, (float)sys->frota[i].distancia_percorrida / sys->frota[i].distancia * 100);  
+
                     } else{
                         printf("\n[THREAD-FROTA] [VEICULO %d para %s(%d)]: %s\n", sys->frota[i].pid_veiculo, u->nome, u->pid_cliente, msg);
                     }
@@ -772,17 +800,17 @@ int main(){
     }
     
     if (pthread_create(&sys->control_tid, NULL, tControl, (void*)sys) != 0) {
-        perror("Erro ao criar thread para controlo do controlador");
+        perror("Erro ao criar thread para controlo do controlador.");
         exit(1);
     }
 
     if (pthread_create(&sys->tempo_tid, NULL, tTempo, (void*)sys) != 0) {
-        perror("Erro ao criar thread para controlo do controlador");
+        perror("Erro ao criar thread para controlo do controlador.");
         exit(1);
     }
 
     if (pthread_create(&sys->frota_tid, NULL, tTFrota, (void*)sys) != 0) {
-        perror("Erro ao criar thread para controlo do controlador");
+        perror("Erro ao criar thread para controlo do controlador.");
         exit(1);
     }
 

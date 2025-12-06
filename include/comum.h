@@ -20,6 +20,7 @@
 #define MAX_USERS 30
 #define MAX_VEICULOS 10
 #define MAX_STR 100
+#define MAX_LONG_STR 200
 #define MAX_PIPE MAX_STR + 15
 
 // Deixei assi talvez depois tira se nao sei 

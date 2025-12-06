@@ -24,8 +24,8 @@ int main(int argc, char* argv[]){
 
     User user;
     char buffer_teclado[MAX_STR];
-    char buffer_pipe[MAX_STR*2];
-    char msg_envio[MAX_STR*2];
+    char buffer_pipe[MAX_LONG_STR];
+    char msg_envio[MAX_LONG_STR + 100];
 
     if(argc!=2){
         printf("Numero de argumentos errado.\n O correto seria ./cliente pedro\n");
@@ -33,7 +33,7 @@ int main(int argc, char* argv[]){
     }
 
     if(access(PIPE_CONTROLADOR,F_OK) != 0){
-        printf("Controlador nao esta a correr. \n");
+        printf("Controlador nao esta a correr.\n");
         return 0;
     }
 
@@ -71,7 +71,7 @@ int main(int argc, char* argv[]){
     // LOGIN
     int fd_ctrl = open(PIPE_CONTROLADOR, O_WRONLY);
     if(fd_ctrl == -1){
-        perror("Erro ao abrir pipe controlador");
+        perror("Erro ao abrir pipe controlador.");
         close(fd);
         unlink(user.fifo_privado);
         exit(1);

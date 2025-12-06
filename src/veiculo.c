@@ -16,7 +16,7 @@ int main(int argc, char* argv[]){
     ptr_cancelar = &cancelar;
     
     if(argc != 5){
-        printf("Numero de parametros errado.\nUso: ./veiculo <id> <origem> <distanciaTotal> <pipe_controlador> <pipe_cliente>");
+        printf("Numero de parametros errado.\nUso correto: ./veiculo <id> <origem> <distanciaTotal> <pipe_cliente>");
         return 1;
     }
 
@@ -36,7 +36,7 @@ int main(int argc, char* argv[]){
     
     int fd_cli = open(pipe_cliente, O_WRONLY);
     if(fd_cli == -1){
-        perror("Erro ao abrir pipe do cliente");
+        perror("Erro ao abrir pipe do cliente.");
         return 1;
     }
     
