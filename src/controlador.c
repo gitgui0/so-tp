@@ -74,10 +74,7 @@ Veiculo* devolveVeiculoPorPID(pid_t pid){
     return NULL;
 }
 void cancelarServico(int idCancelar){
-    printf("%d na funcao\n",idCancelar);
-     
     pthread_mutex_lock(&servicos_mutex);
-    printf("[DEBUG] Lock SERVICOS capturado (dentro de cancelarServico)\n"); 
     fflush(stdout); // Força a escrita no terminal
 
     int i = 0;
@@ -87,7 +84,6 @@ void cancelarServico(int idCancelar){
             // tratar do veiculo em servicos em curso
             if(servicos[i].estado == SERV_EM_CURSO){
                 pthread_mutex_lock(&frota_mutex);
-                printf("[DEBUG] Lock FROTA capturado (dentro de cancelarServico)\n");
                 fflush(stdout);
                 int idx_veiculo = -1;
                 for(int v=0; v<nVeiculos; v++){
@@ -108,11 +104,9 @@ void cancelarServico(int idCancelar){
                     frota[idx_veiculo] = frota[nVeiculos - 1];
                     nVeiculos--;
                     pthread_mutex_unlock(&frota_mutex);
-                    printf("[DEBUG] Unlock FROTA realizado (dentro de cancelarServico)\n");
                     fflush(stdout);
 
                     waitpid(pid, NULL, 0);
-                    printf("[DEBUG] Veiculo %d terminou.\n", pid);
                     
                 } else {
                     // Se não encontrou veiculo (estranho, mas possivel), liberta lock
@@ -137,7 +131,6 @@ void cancelarServico(int idCancelar){
     }
     
     pthread_mutex_unlock(&servicos_mutex);
-    printf("[DEBUG] Unlock SERVICOS realizado (dentro de cancelarServico)\n");
 }
 
 void listaUsers(){
@@ -559,7 +552,6 @@ void* tTempo(void* arg){
                 if(nVeiculos >= max_veiculos){
                     printf("Nao ha veiculos livres e ja atingimos o maximo de veiculos (%d)\n", max_veiculos);
                     pthread_mutex_unlock(&servicos_mutex); 
-                    printf("[DEBUG] unlock servico no tempo limiete\n");
                         
                     continue;
                 } else {
@@ -621,7 +613,6 @@ void* tTempo(void* arg){
                         fcntl(fd_v[0], F_SETFL, flags | O_NONBLOCK);
                         
                         pthread_mutex_lock(&frota_mutex);
-                         printf("[DEBUG] lock frota no tempo\n");
                         
                         frota[nVeiculos] = novo;
                         nVeiculos++;
@@ -629,7 +620,6 @@ void* tTempo(void* arg){
                         servicos[i].estado = SERV_EM_CURSO;
 
                         pthread_mutex_unlock(&frota_mutex);
-                         printf("[DEBUG] unlock frota no tempo\n");
                         
                         User* u = devolveUserPorPID(servicos[i].pid_cliente);
                         printf(" Veiculo (%d) iniciado para %s(%d) \n", novo.pid_veiculo, u->nome, u->pid_cliente);
