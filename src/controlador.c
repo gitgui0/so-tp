@@ -75,13 +75,15 @@ Veiculo* devolveVeiculoPorPID(pid_t pid){
 }
 void cancelarServico(int idCancelar){
     printf("%d na funcao\n",idCancelar);
+     
+    pthread_mutex_lock(&servicos_mutex);
+    printf("[DEBUG] Lock SERVICOS capturado (dentro de cancelarServico)\n"); 
+    fflush(stdout); // Força a escrita no terminal
 
     int i = 0;
     while(i < nServicos){    
-        if(servicos[i].id == idCancelar || idCancelar == 0){    
-            pthread_mutex_lock(&servicos_mutex);
-            printf("[DEBUG] Lock SERVICOS capturado (dentro de cancelarServico)\n"); 
-            fflush(stdout); // Força a escrita no terminal
+        if(servicos[i].id == idCancelar || idCancelar == 0){   
+          
             // tratar do veiculo em servicos em curso
             if(servicos[i].estado == SERV_EM_CURSO){
                 pthread_mutex_lock(&frota_mutex);
@@ -100,17 +102,23 @@ void cancelarServico(int idCancelar){
                     pid_t pid = frota[idx_veiculo].pid_veiculo;
                     
                     kill(pid, SIGUSR1);
-                    waitpid(pid, NULL, 0); 
                     close(frota[idx_veiculo].fd_leitura);
 
                     // remove da frota
                     frota[idx_veiculo] = frota[nVeiculos - 1];
                     nVeiculos--;
+                    pthread_mutex_unlock(&frota_mutex);
+                    printf("[DEBUG] Unlock FROTA realizado (dentro de cancelarServico)\n");
+                    fflush(stdout);
+
+                    waitpid(pid, NULL, 0);
+                    printf("[DEBUG] Veiculo %d terminou.\n", pid);
+                    
+                } else {
+                    // Se não encontrou veiculo (estranho, mas possivel), liberta lock
+                    pthread_mutex_unlock(&frota_mutex);
                 }
                 
-                pthread_mutex_unlock(&frota_mutex);
-                printf("[DEBUG] Unlock FROTA realizado (dentro de cancelarServico)\n");
-                fflush(stdout);
             }
 
             printf("[CANCELAR] Servico ID %d cancelado.\n", servicos[i].id);
@@ -119,8 +127,6 @@ void cancelarServico(int idCancelar){
                 servicos[j] = servicos[j+1];
             }
             nServicos--; 
-            pthread_mutex_unlock(&servicos_mutex);
-            printf("[DEBUG] Unlock SERVICOS realizado (dentro de cancelarServico)\n");
             if(idCancelar != 0){
                 break; // se for para cancelar um especifico, sai aqui
             }
@@ -129,6 +135,9 @@ void cancelarServico(int idCancelar){
             i++;
         }
     }
+    
+    pthread_mutex_unlock(&servicos_mutex);
+    printf("[DEBUG] Unlock SERVICOS realizado (dentro de cancelarServico)\n");
 }
 
 void listaUsers(){
@@ -340,45 +349,47 @@ void tratarComandoCliente(char* cmd, char* nome, char* args) {
 
         
         
-    }else if(strcmp(cmd, "cancelar")==0){
-        printf("\nnome: %s\n",nome);
+    }else if(strcmp(cmd, "cancelar") == 0){
         User* u = devolveUserPorNome(nome);
+        int id_input = -1;
+        sscanf(args, "%d", &id_input);
 
-        printf("\nUser nome: %s\n",u->nome);
-        int id = -1, eliminados = 0;
-        char resposta[MAX_STR];
+        int ids_para_cancelar[MAX_SERVICOS];
+        int count_cancelar = 0;
 
-        sscanf(args,"%d",&id);
-        printf("\n no parse do comando id a cancelar: %d\n",id);
-
-        int fd_c = open(u->fifo_privado, O_WRONLY);
-        if(fd_c == -1){
-            printf("\nErro ao abrir pipe do cliente para cancelar com o nome %s\n", nome);
-        }else{
-
-            int i = 0;
-            while(i < nServicos){
-                //verifica se o servico pertence ao user
-                if(servicos[i].pid_cliente == u->pid_cliente){
-                    //verifica o id do servico
-                    if(servicos[i].id == id || id == 0){
-                        //cancelar servico
-                        cancelarServico(servicos[i].id);
-                        eliminados++;
-                    }
-                }else{
-                    i++;
+        // 1. IDENTIFICAR O QUE É PARA CANCELAR (COM LOCK)
+        pthread_mutex_lock(&servicos_mutex);
+        
+        for(int i = 0; i < nServicos; i++){
+            // Verifica se o serviço é deste cliente
+            if(servicos[i].pid_cliente == u->pid_cliente){
+                // Verifica se é o ID pedido ou se é "cancelar todos" (0)
+                if(id_input == 0 || servicos[i].id == id_input){
+                    ids_para_cancelar[count_cancelar] = servicos[i].id;
+                    count_cancelar++;
                 }
             }
+        }
+        
+        pthread_mutex_unlock(&servicos_mutex);
 
+        // 2. EXECUTAR O CANCELAMENTO (FORA DO LOCK DE LEITURA)
+        // Agora podemos chamar cancelarServico com segurança, pois ela gere os seus próprios locks
+        int eliminados = 0;
+        for(int k = 0; k < count_cancelar; k++){
+            cancelarServico(ids_para_cancelar[k]);
+            eliminados++;
+        }
+
+        // 3. RESPONDER AO CLIENTE
+        int fd_c = open(u->fifo_privado, O_WRONLY);
+        if(fd_c != -1){
+            char resposta[MAX_STR];
             sprintf(resposta, "%d servico(s) cancelado(s).\n", eliminados);
             write(fd_c, resposta, strlen(resposta));
             close(fd_c);
         }
-    }else {
-        printf("\n[AVISO] Comando desconhecido: %s", cmd);
-
-    }
+        }
     printf("\nAdmin> ");
     fflush(stdout);
 }
@@ -656,23 +667,33 @@ void *tTFrota(void* arg){
                     sscanf(buf, "%s %d", msg, &distanciaAtual);
 
                     if(strcmp(msg,VIAGEM_CONCLUIDA)==0){
-                        frota[i].estado = VEICULO_LIVRE;
+                        pid_t pid_veiculo = frota[i].pid_veiculo;
+                        int id_servico = frota[i].id_servico;
+
+                        close(frota[i].fd_leitura);
+                        for(int j = i; j < nVeiculos - 1; j++){
+                            frota[j] = frota[j + 1];
+                        }
+                        nVeiculos--;
+                        i--; // Ajustar indice pois removemos elemento
+
+                        // --- IMPORTANTE: LIBERTAR A FROTA AGORA ---
+                        pthread_mutex_unlock(&frota_mutex);
+
+                        printf("[THREAD-FROTA] Veiculo %d terminou viagem.\n", pid_veiculo);
  
+                        pthread_mutex_lock(&servicos_mutex);
                         if(s != NULL){
                             s->estado = SERV_CONCLUIDO;
-
-                            char resposta[MAX_STR];
-                            printf("[THREAD-FROTA] Veiculo (%d) concluiu a viagem do %s(%d)\n", frota[i].pid_veiculo, u->nome, u->pid_cliente);                
-                            
-                            waitpid(frota[i].pid_veiculo, NULL, 0); // evitar zombies
-
-                            //shift
-                            for(int j = i; j < nVeiculos - 1; j++){
-                                frota[j] = frota[j + 1];
-                            }
-                            nVeiculos--;
-                            
+                            // Opcional: obter nome do user (com cuidado ou cache)
+                            printf("[THREAD-FROTA] Servico %d concluido.\n", id_servico);
                         }
+                        pthread_mutex_unlock(&servicos_mutex);
+
+                        waitpid(pid_veiculo, NULL, 0);
+
+                        // Voltar a bloquear para continuar o loop da frota
+                        pthread_mutex_lock(&frota_mutex);
                     }else if(strcmp(msg,"PROGRESSO")==0){
                         frota[i].distancia_percorrida = distanciaAtual;  
                     } else{
