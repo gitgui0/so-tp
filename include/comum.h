@@ -110,6 +110,7 @@ typedef struct {
     int loop;
     int em_viagem;
     int pedido_terminar;
+    int logout;
 } ClienteEstado;
 
 // --- Funções ----

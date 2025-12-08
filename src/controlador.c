@@ -70,8 +70,12 @@ void cancelarServico(SistemaControlador *sys,int idCancelar){
                 // encontrou o veiculo
                 if(idx_veiculo != -1){
                     pid_t pid = sys->frota[idx_veiculo].pid_veiculo;
-                    
-                    kill(pid, SIGUSR1);
+                    union sigval val;
+                    val.sival_int = 0;
+
+                    if(sigqueue(pid, SIGUSR1,val)==-1){
+                        perror("Erro ao enviar sigqueue para o veiculo");
+                    }
                     close(sys->frota[idx_veiculo].fd_leitura);
 
                     // remove da frota
@@ -252,7 +256,6 @@ void tratarComandoCliente(char* cmd, char* nome, char* args,SistemaControlador *
                         k--; 
                     }
                 }
-                break;
             }
         }
     }
@@ -269,6 +272,7 @@ void tratarComandoCliente(char* cmd, char* nome, char* args,SistemaControlador *
         if(novo.hora_agendada < sys->tempo){
             sprintf(resposta, "Nao e possivel agendar um servico para uma hora ja passada.\n");
             write(fd_c, resposta, strlen(resposta));
+            close(fd_c);
             return;
         }
 
@@ -286,7 +290,7 @@ void tratarComandoCliente(char* cmd, char* nome, char* args,SistemaControlador *
         sprintf(resposta, "Servico agendado com sucesso.\n");
         write(fd_c, resposta, strlen(resposta));
 
-
+        close(fd_c);
         
 
     }else if(strcmp(cmd,"consultar") == 0){
@@ -316,6 +320,7 @@ void tratarComandoCliente(char* cmd, char* nome, char* args,SistemaControlador *
                 sprintf(resposta, "Nao foram encontrados servicos.\n");
                 write(fd_c, resposta, strlen(resposta));
             }
+            close(fd_c);
         }else{
             printf("\nErro ao abrir pipe do cliente para consultar com o nome %s\n", nome);
         }
@@ -830,9 +835,9 @@ int main(){
             union sigval val;
             val.sival_int = 0;
             
-            if(sigqueue(sys->users[i].pid_cliente, SIGINT, val) == -1){
-                perror("Erro ao enviar sigqueue para cliente");
-            }
+            if(sigqueue(sys->users[i].pid_cliente, SIGUSR1, val) == -1){
+                perror("Erro ao enviar sigqueue SIGUSR1 para cliente.");
+            } 
         }
     }   
     

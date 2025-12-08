@@ -6,8 +6,15 @@ ClienteEstado *ptr_estado = NULL;
 void handleSinal(int sinal, siginfo_t *info, void *context){
     (void)info; (void)context; // Silenciar warnings de variaveis nao usadas
     if(sinal == SIGINT){ 
+        // user
         printf("\nSIGINT\n");
         ptr_estado->loop = 0;
+        ptr_estado->logout=1;
+    }else if(sinal == SIGUSR1){
+        // controlador
+        printf("\nSIGUSR1\n");
+        ptr_estado->loop = 0;
+        ptr_estado->logout=0;
     }
 }
 
@@ -19,6 +26,7 @@ int main(int argc, char* argv[]){
     estado.loop = 1;
     estado.em_viagem = 0;
     estado.pedido_terminar = 0;
+    estado.logout = 1;
 
     ptr_estado = &estado;
 
@@ -44,6 +52,7 @@ int main(int argc, char* argv[]){
     sa.sa_sigaction = handleSinal;
     sa.sa_flags = SA_SIGINFO;
     sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGUSR1, &sa, NULL);
     
     //INICIALIZACAO DO USER
     memset(&user,0,sizeof(User));
@@ -176,6 +185,12 @@ int main(int argc, char* argv[]){
         }
     }
 
+    if(estado.logout == 1){
+        sprintf(msg_envio, "LOGOUT %s", user.nome);
+        write(fd_ctrl, msg_envio, strlen(msg_envio));
+    }
+
+    close(fd_ctrl);
     close(fd);
     unlink(user.fifo_privado);
 
