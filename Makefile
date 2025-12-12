@@ -10,14 +10,14 @@ all: $(EXECS)
 # Regras para compilar cada programa
 
 # --- AQUI: Adicionar -lpthread para o controlador (que usa threads) ---
-bin/controlador: src/controlador.c
+controlador: src/controlador.c
 	$(CC) $(CFLAGS) -o $@ $< -lpthread
 
 # Se o cliente também usar threads no futuro, adicione também aqui:
-bin/cliente: src/cliente.c
+cliente: src/cliente.c
 	$(CC) $(CFLAGS) -o $@ $< -lpthread
 
-bin/veiculo: src/veiculo.c
+veiculo: src/veiculo.c
 	$(CC) $(CFLAGS) -o $@ $<
 
 
