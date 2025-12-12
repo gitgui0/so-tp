@@ -68,7 +68,7 @@ int main(int argc, char* argv[]){
         sprintf(msg_cli, "O servico foi cancelado.\n");
         write(fd_cli, msg_cli, strlen(msg_cli));
     }else{
-        sprintf(msg_cli, "Veiculo %d chegou ao destino.\n", getppid());
+        sprintf(msg_cli, "Veiculo %d chegou ao destino.\n", getpid());
         write(fd_cli, msg_cli, strlen(msg_cli));
         sprintf(msg_ctrl, "%s", VIAGEM_CONCLUIDA);
         write(STDOUT_FILENO, msg_ctrl, strlen(msg_ctrl));
